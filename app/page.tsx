@@ -18,7 +18,6 @@ import {
   Moon,
   Sun,
   Search,
-  LineChart,
 } from "lucide-react"
 
 interface StockData {
@@ -48,23 +47,6 @@ interface StockDetail {
   }>
 }
 
-interface MarketDataPoint {
-  timestamp: number
-  date: string
-  time: string
-  stocks: StockData[]
-}
-
-interface MarketAnalytics {
-  totalDataPoints: number
-  avgVolume: number
-  topPerformers: { symbol: string; avgChange: number }[]
-  worstPerformers: { symbol: string; avgChange: number }[]
-  marketTrend: "bullish" | "bearish" | "neutral"
-  volatilityIndex: number
-  priceMovements: { symbol: string; movements: number[] }[]
-}
-
 export default function TanzaniaStockDashboard() {
   const [stockData, setStockData] = useState<StockData[]>([])
   const [selectedStock, setSelectedStock] = useState<StockData | null>(null)
@@ -75,136 +57,11 @@ export default function TanzaniaStockDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  const [marketAnalytics, setMarketAnalytics] = useState<MarketAnalytics | null>(null)
-  const [showAnalytics, setShowAnalytics] = useState(false)
-
-  const saveMarketData = (stocks: StockData[]) => {
-    try {
-      const now = new Date()
-      const existingData = localStorage.getItem("dse_market_data")
-      let marketDataArray: MarketDataPoint[] = existingData ? JSON.parse(existingData) : []
-
-      // Add current data point
-      marketDataArray.push({
-        timestamp: now.getTime(),
-        date: now.toDateString(),
-        time: now.toLocaleTimeString(),
-        stocks: stocks,
-      })
-
-      // Keep only last 500 data points (approximately 16-17 hours of data at 2-minute intervals)
-      marketDataArray = marketDataArray.sort((a, b) => b.timestamp - a.timestamp).slice(0, 500)
-
-      localStorage.setItem("dse_market_data", JSON.stringify(marketDataArray))
-
-      // Generate analytics after saving
-      generateAnalytics(marketDataArray)
-    } catch (error) {
-      console.error("Error saving market data:", error)
-    }
-  }
-
-  const generateAnalytics = (marketData: MarketDataPoint[]) => {
-    if (marketData.length < 5) return // Need at least 5 data points
-
-    try {
-      const totalDataPoints = marketData.length
-
-      // Calculate average volume across all data points
-      const avgVolume =
-        marketData.reduce((sum, dataPoint) => {
-          const pointVolume = dataPoint.stocks.reduce((daySum, stock) => daySum + stock.volume, 0)
-          return sum + pointVolume
-        }, 0) / totalDataPoints
-
-      // Track price movements for each stock
-      const stockPriceHistory: { [symbol: string]: { prices: number[]; changes: number[] } } = {}
-
-      marketData.forEach((dataPoint) => {
-        dataPoint.stocks.forEach((stock) => {
-          if (!stockPriceHistory[stock.symbol]) {
-            stockPriceHistory[stock.symbol] = { prices: [], changes: [] }
-          }
-          stockPriceHistory[stock.symbol].prices.push(stock.price)
-          stockPriceHistory[stock.symbol].changes.push(stock.change)
-        })
-      })
-
-      // Calculate average performance for each stock
-      const avgPerformance = Object.entries(stockPriceHistory).map(([symbol, data]) => ({
-        symbol,
-        avgChange: data.changes.reduce((sum, change) => sum + change, 0) / data.changes.length,
-      }))
-
-      // Get top and worst performers
-      const sortedPerformance = avgPerformance.sort((a, b) => b.avgChange - a.avgChange)
-      const topPerformers = sortedPerformance.slice(0, 3)
-      const worstPerformers = sortedPerformance.slice(-3).reverse()
-
-      // Calculate market trend based on recent data points (last 30 data points = 1 hour)
-      const recentDataPoints = marketData.slice(0, Math.min(30, marketData.length))
-      const marketChanges = recentDataPoints.map(
-        (dataPoint) => dataPoint.stocks.reduce((sum, stock) => sum + stock.change, 0) / dataPoint.stocks.length,
-      )
-      const avgMarketChange = marketChanges.reduce((sum, change) => sum + change, 0) / marketChanges.length
-
-      let marketTrend: "bullish" | "bearish" | "neutral" = "neutral"
-      if (avgMarketChange > 2) marketTrend = "bullish"
-      else if (avgMarketChange < -2) marketTrend = "bearish"
-
-      // Calculate volatility index (standard deviation of market changes)
-      const mean = avgMarketChange
-      const variance = marketChanges.reduce((sum, change) => sum + Math.pow(change - mean, 2), 0) / marketChanges.length
-      const volatilityIndex = Math.sqrt(variance)
-
-      // Create price movement data for analysis
-      const priceMovements = Object.entries(stockPriceHistory).map(([symbol, data]) => ({
-        symbol,
-        movements: data.prices.slice(-20), // Last 20 data points for trend analysis
-      }))
-
-      const analytics: MarketAnalytics = {
-        totalDataPoints,
-        avgVolume,
-        topPerformers,
-        worstPerformers,
-        marketTrend,
-        volatilityIndex,
-        priceMovements,
-      }
-
-      setMarketAnalytics(analytics)
-    } catch (error) {
-      console.error("Error generating analytics:", error)
-    }
-  }
-
-  useEffect(() => {
-    const existingData = localStorage.getItem("dse_market_data")
-    if (existingData) {
-      try {
-        const marketDataArray: MarketDataPoint[] = JSON.parse(existingData)
-        generateAnalytics(marketDataArray)
-      } catch (error) {
-        console.error("Error loading analytics:", error)
-      }
-    }
-  }, [])
 
   const fetchStockData = async () => {
-    console.log("[v0] Fetching stock data...")
-    const now = new Date()
-    const currentHour = now.getHours()
-
-    if (currentHour < 10 || currentHour >= 18) {
-      console.log("[v0] Outside trading hours (10am-6pm), skipping data fetch")
-      return
-    }
-
     try {
       setLoading(true)
       setError(null)
-      console.log("[v0] Making API call to DSE...")
 
       const response = await fetch("https://api.dse.co.tz/api/market-data?isBond=false")
 
@@ -213,7 +70,6 @@ export default function TanzaniaStockDashboard() {
       }
 
       const data = await response.json()
-      console.log("[v0] API response received:", data.length, "stocks")
 
       const transformedData: StockData[] = data.map((item: any) => ({
         id: item.id || item.security?.id || item.companyId || item.symbol,
@@ -233,9 +89,8 @@ export default function TanzaniaStockDashboard() {
 
       setStockData(transformedData)
       setLastUpdated(new Date())
-      saveMarketData(transformedData)
     } catch (err) {
-      console.error("[v0] Error fetching stock data:", err)
+      console.error("Error fetching stock data:", err)
       setError("Failed to fetch market data. Please try again.")
 
       const mockData: StockData[] = [
@@ -307,7 +162,6 @@ export default function TanzaniaStockDashboard() {
       ]
       setStockData(mockData)
       setLastUpdated(new Date())
-      saveMarketData(mockData)
     } finally {
       setLoading(false)
     }
@@ -360,54 +214,35 @@ export default function TanzaniaStockDashboard() {
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode)
-    if (typeof document !== "undefined") {
-      document.documentElement.classList.toggle("dark")
-    }
+    document.documentElement.classList.toggle("dark")
   }
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedTheme = localStorage.getItem("theme")
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
+    const savedTheme = localStorage.getItem("theme")
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
 
-      if (savedTheme === "dark" || (!savedTheme && prefersDark)) {
-        setIsDarkMode(true)
-        document.documentElement.classList.add("dark")
-      }
+    if (savedTheme === "dark" || (!savedTheme && prefersDark)) {
+      setIsDarkMode(true)
+      document.documentElement.classList.add("dark")
     }
   }, [])
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("theme", isDarkMode ? "dark" : "light")
-    }
+    localStorage.setItem("theme", isDarkMode ? "dark" : "light")
   }, [isDarkMode])
 
   useEffect(() => {
-    console.log("[v0] Initializing dashboard...")
     fetchStockData()
 
-    const interval = setInterval(() => {
-      console.log("[v0] Auto-refresh triggered")
-      fetchStockData()
-    }, 300000)
-
-    return () => {
-      console.log("[v0] Cleaning up intervals")
-      clearInterval(interval)
-    }
+    const interval = setInterval(fetchStockData, 120000)
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
     if (selectedStock && selectedStock.id) {
       const detailInterval = setInterval(() => {
-        const now = new Date()
-        const currentHour = now.getHours()
-
-        if (currentHour >= 10 && currentHour < 18) {
-          fetchStockDetail(selectedStock.id!)
-        }
-      }, 300000)
+        fetchStockDetail(selectedStock.id!)
+      }, 120000)
       return () => clearInterval(detailInterval)
     }
   }, [selectedStock])
@@ -492,27 +327,6 @@ export default function TanzaniaStockDashboard() {
                     <p className="text-xs font-medium font-body">{lastUpdated.toLocaleTimeString()}</p>
                   </div>
                 )}
-                <Link href="/analysis">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center space-x-1 sm:space-x-2 hover-lift glass-effect border-primary/20 hover:border-primary/40 bg-transparent"
-                  >
-                    <LineChart className="h-3 w-3 sm:h-4 sm:w-4" />
-                    <span className="hidden sm:inline">Analysis</span>
-                  </Button>
-                </Link>
-                {marketAnalytics && (
-                  <Button
-                    onClick={() => setShowAnalytics(!showAnalytics)}
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center space-x-1 sm:space-x-2 hover-lift glass-effect border-primary/20 hover:border-primary/40 bg-transparent"
-                  >
-                    <LineChart className="h-3 w-3 sm:h-4 sm:w-4" />
-                    <span className="hidden sm:inline">Quick View</span>
-                  </Button>
-                )}
                 <Button
                   onClick={toggleDarkMode}
                   variant="outline"
@@ -538,84 +352,6 @@ export default function TanzaniaStockDashboard() {
         </header>
 
         <main className="container mx-auto px-3 sm:px-6 py-4 sm:py-8">
-          {showAnalytics && marketAnalytics && (
-            <Card className="mb-6 sm:mb-8 hover-lift glass-effect border-primary/10 animate-slide-up">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2 font-heading">
-                  <LineChart className="h-5 w-5 text-primary" />
-                  <span>Market Analytics ({marketAnalytics.totalDataPoints} data points)</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                    <div className="text-sm text-muted-foreground">Market Trend</div>
-                    <div
-                      className={`text-lg font-bold ${
-                        marketAnalytics.marketTrend === "bullish"
-                          ? "text-chart-3"
-                          : marketAnalytics.marketTrend === "bearish"
-                            ? "text-chart-5"
-                            : "text-muted-foreground"
-                      }`}
-                    >
-                      {marketAnalytics.marketTrend.toUpperCase()}
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-secondary/5 border border-secondary/20">
-                    <div className="text-sm text-muted-foreground">Avg Volume</div>
-                    <div className="text-lg font-bold text-secondary">
-                      {(marketAnalytics.avgVolume / 1000).toFixed(0)}K
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-chart-3/5 border border-chart-3/20">
-                    <div className="text-sm text-muted-foreground">Volatility Index</div>
-                    <div className="text-lg font-bold text-chart-3">{marketAnalytics.volatilityIndex.toFixed(1)}</div>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-chart-4/5 border border-chart-4/20">
-                    <div className="text-sm text-muted-foreground">Data Points</div>
-                    <div className="text-lg font-bold text-chart-4">{marketAnalytics.totalDataPoints}</div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h4 className="text-sm font-semibold mb-3 text-chart-3">Top Performers (Avg Change)</h4>
-                    <div className="space-y-2">
-                      {marketAnalytics.topPerformers.map((stock, index) => (
-                        <div
-                          key={stock.symbol}
-                          className="flex justify-between items-center p-3 rounded-lg bg-chart-3/5 border border-chart-3/20"
-                        >
-                          <span className="font-medium">{stock.symbol}</span>
-                          <span className="text-chart-3 font-bold">+{stock.avgChange.toFixed(1)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-semibold mb-3 text-chart-5">Worst Performers (Avg Change)</h4>
-                    <div className="space-y-2">
-                      {marketAnalytics.worstPerformers.map((stock, index) => (
-                        <div
-                          key={stock.symbol}
-                          className="flex justify-between items-center p-3 rounded-lg bg-chart-5/5 border border-chart-5/20"
-                        >
-                          <span className="font-medium">{stock.symbol}</span>
-                          <span className="text-chart-5 font-bold">{stock.avgChange.toFixed(1)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
             <Card
               className="hover-lift glass-effect border-primary/10 animate-slide-up"
