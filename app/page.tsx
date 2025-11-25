@@ -457,10 +457,10 @@ export default function TanzaniaStockDashboard() {
                 style={{ animationDelay: "0.3s" }}
               >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 p-1.5 sm:p-2">
-                  <CardTitle className="text-xs sm:text-xs font-medium font-body">Gainers</CardTitle>
-                  <div className="p-0.5 rounded-full bg-chart-3/10">
-                    <TrendingUp className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-chart-3" />
-                  </div>
+                  <CardTitle className="flex items-center space-x-2 font-body text-sm sm:text-base">
+                    <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                    <span>Gainers</span>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="pb-1.5 sm:pb-2 px-1.5 sm:px-2 pt-0">
                   <div className="text-xs sm:text-sm font-bold text-chart-3 font-body">{gainers}</div>
@@ -474,10 +474,10 @@ export default function TanzaniaStockDashboard() {
                 style={{ animationDelay: "0.4s" }}
               >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 p-1.5 sm:p-2">
-                  <CardTitle className="text-xs sm:text-xs font-medium font-body">Losers</CardTitle>
-                  <div className="p-0.5 rounded-full bg-chart-5/10">
-                    <TrendingDown className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-chart-5" />
-                  </div>
+                  <CardTitle className="flex items-center space-x-2 font-body text-sm sm:text-base">
+                    <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 text-chart-5" />
+                    <span>Losers</span>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="pb-1.5 sm:pb-2 px-1.5 sm:px-2 pt-0">
                   <div className="text-xs sm:text-sm font-bold text-chart-5 font-body">{losers}</div>
@@ -548,13 +548,13 @@ export default function TanzaniaStockDashboard() {
                           <SortIcon column="change" label="Change" />
                         </div>
                       </th>
-                      <th className="text-right py-2 sm:py-3 px-2 sm:px-4 hidden sm:table-cell font-body text-xs sm:text-sm font-medium">
+                      <th className="text-right py-2 sm:py-4 px-2 sm:px-6 hidden sm:table-cell font-body text-xs sm:text-sm font-medium">
                         <SortIcon column="volume" label="Volume" />
                       </th>
-                      <th className="text-right py-2 sm:py-3 px-2 sm:px-4 hidden lg:table-cell font-body text-xs sm:text-sm font-medium">
+                      <th className="text-right py-2 sm:py-4 px-2 sm:px-6 hidden lg:table-cell font-body text-xs sm:text-sm font-medium">
                         <SortIcon column="bestBidPrice" label="Bid" />
                       </th>
-                      <th className="text-right py-2 sm:py-3 px-2 sm:px-4 hidden lg:table-cell font-body text-xs sm:text-sm font-medium">
+                      <th className="text-right py-2 sm:py-4 px-2 sm:px-6 hidden lg:table-cell font-body text-xs sm:text-sm font-medium">
                         <SortIcon column="bestOfferPrice" label="Offer" />
                       </th>
                     </tr>
@@ -657,31 +657,31 @@ export default function TanzaniaStockDashboard() {
           </div>
 
           {stockDetail && (
-            <div className="bg-background/95 backdrop-blur-sm border-b border-border/30 p-3 lg:p-4 space-y-3 lg:space-y-4 flex-shrink-0 z-10 relative">
-              <div className="grid grid-cols-2 gap-2 lg:gap-3">
+            <div className="bg-background/95 backdrop-blur-sm border-b border-border/30 p-2 lg:p-3 space-y-2 lg:space-y-2 flex-shrink-0 z-10 relative">
+              <div className="grid grid-cols-2 gap-1.5 lg:gap-2">
                 <Card className="glass-effect border-primary/10">
-                  <CardHeader className="pb-1 lg:pb-2 p-2 lg:p-3">
+                  <CardHeader className="pb-0 p-1 lg:p-1.5">
                     <CardTitle className="text-xs font-medium font-body flex items-center">
-                      <TrendingUp className="h-3 w-3 text-chart-3 mr-1" />
+                      <TrendingUp className="h-3 w-3 text-chart-3 mr-0.5" />
                       Best Buy
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-2 lg:p-3 pt-0">
-                    <div className="text-sm lg:text-lg font-bold text-chart-3 font-body">
+                  <CardContent className="p-1 lg:p-1.5 pt-0">
+                    <div className="text-xs lg:text-sm font-bold text-chart-3 font-body">
                       {stockDetail.bestBuyPrice.toLocaleString()}
                     </div>
                   </CardContent>
                 </Card>
 
                 <Card className="glass-effect border-primary/10">
-                  <CardHeader className="pb-1 lg:pb-2 p-2 lg:p-3">
+                  <CardHeader className="pb-0 p-1 lg:p-1.5">
                     <CardTitle className="text-xs font-medium font-body flex items-center">
-                      <TrendingDown className="h-3 w-3 text-chart-5 mr-1" />
+                      <TrendingDown className="h-3 w-3 text-chart-5 mr-0.5" />
                       Best Sell
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-2 lg:p-3 pt-0">
-                    <div className="text-sm lg:text-lg font-bold text-chart-5 font-body">
+                  <CardContent className="p-1 lg:p-1.5 pt-0">
+                    <div className="text-xs lg:text-sm font-bold text-chart-5 font-body">
                       {stockDetail.bestSellPrice > 0 ? stockDetail.bestSellPrice.toLocaleString() : "N/A"}
                     </div>
                   </CardContent>
@@ -691,13 +691,16 @@ export default function TanzaniaStockDashboard() {
               {(() => {
                 const orderStats = calculateOrderStats(stockDetail.orders)
                 return (
-                  <div className="space-y-2 lg:space-y-3">
-                    <h3 className="text-sm lg:text-base font-semibold font-body">Order Statistics</h3>
+                  <div className="space-y-1 lg:space-y-2">
+                    <h3 className="text-xs lg:text-sm font-semibold font-body flex items-center">
+                      <Sparkles className="h-4 w-4 text-primary mr-2" />
+                      Order Statistics
+                    </h3>
 
-                    <div className="grid grid-cols-2 gap-2 lg:gap-3">
-                      <div className="p-2 lg:p-3 rounded-lg bg-chart-3/5 border border-chart-3/20">
+                    <div className="grid grid-cols-2 gap-1.5 lg:gap-2">
+                      <div className="p-1.5 lg:p-2 rounded-lg bg-chart-3/5 border border-chart-3/20">
                         <div className="text-xs text-chart-3 font-medium font-body">Buy Volume</div>
-                        <div className="text-sm lg:text-base font-bold text-chart-3 font-body">
+                        <div className="text-xs lg:text-sm font-bold text-chart-3 font-body">
                           {orderStats.totalBuyQuantity.toLocaleString()}
                         </div>
                         <div className="text-xs text-muted-foreground font-body">
@@ -705,9 +708,9 @@ export default function TanzaniaStockDashboard() {
                         </div>
                       </div>
 
-                      <div className="p-2 lg:p-3 rounded-lg bg-chart-5/5 border border-chart-5/20">
+                      <div className="p-1.5 lg:p-2 rounded-lg bg-chart-5/5 border border-chart-5/20">
                         <div className="text-xs text-chart-5 font-medium font-body">Sell Volume</div>
-                        <div className="text-sm lg:text-base font-bold text-chart-5 font-body">
+                        <div className="text-xs lg:text-sm font-bold text-chart-5 font-body">
                           {orderStats.totalSellQuantity.toLocaleString()}
                         </div>
                         <div className="text-xs text-muted-foreground font-body">
