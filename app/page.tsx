@@ -58,6 +58,11 @@ export default function TanzaniaStockDashboard() {
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
 
+  const [sortConfig, setSortConfig] = useState<{
+    column: string | null
+    direction: "asc" | "desc"
+  }>({ column: null, direction: "asc" })
+
   const fetchStockData = async () => {
     try {
       setLoading(true)
@@ -292,10 +297,71 @@ export default function TanzaniaStockDashboard() {
     }
   }
 
+  const applySorting = (stocks: StockData[]) => {
+    const result = [...stocks]
+
+    // Apply sorting
+    if (sortConfig.column) {
+      result.sort((a, b) => {
+        const aValue = a[sortConfig.column as keyof StockData]
+        const bValue = b[sortConfig.column as keyof StockData]
+
+        if (typeof aValue === "string" && typeof bValue === "string") {
+          return sortConfig.direction === "asc" ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue)
+        }
+
+        if (typeof aValue === "number" && typeof bValue === "number") {
+          return sortConfig.direction === "asc" ? aValue - bValue : bValue - aValue
+        }
+
+        return 0
+      })
+    }
+
+    return result
+  }
+
   const filteredStocks = stockData.filter(
     (stock) =>
       stock.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
       stock.name.toLowerCase().includes(searchQuery.toLowerCase()),
+  )
+
+  const handleSort = (column: string) => {
+    let direction: "asc" | "desc" = "asc"
+    if (sortConfig.column === column && sortConfig.direction === "asc") {
+      direction = "desc"
+    }
+    setSortConfig({ column, direction })
+  }
+
+  const getSortedAndFilteredStocks = () => {
+    const sortedStocks = applySorting(stockData)
+    return sortedStocks.filter(
+      (stock) =>
+        stock.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        stock.name.toLowerCase().includes(searchQuery.toLowerCase()),
+    )
+  }
+
+  const displayedStocks = getSortedAndFilteredStocks()
+
+  const SortIcon = ({
+    column,
+    label,
+  }: {
+    column: string
+    label: string
+  }) => (
+    <button
+      onClick={() => handleSort(column)}
+      className="flex items-center space-x-1 cursor-pointer hover:text-primary transition-colors"
+    >
+      <span>{label}</span>
+      <span className="text-xs">
+        {sortConfig.column === column ? (sortConfig.direction === "asc" ? "↑" : "↓") : "↕"}
+      </span>
+    </button>
   )
 
   return (
@@ -311,9 +377,7 @@ export default function TanzaniaStockDashboard() {
                     <BarChart3 className="h-5 w-5 sm:h-8 sm:w-8 text-white" />
                   </div>
                   <div className="animate-slide-up">
-                    <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold text-foreground font-heading">
-                      DSE Market
-                    </h1>
+                    <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold text-foreground font-body">DSE Market</h1>
                     <p className="text-xs sm:text-sm text-muted-foreground font-body hidden sm:block">
                       Dar es Salaam Stock Exchange
                     </p>
@@ -352,24 +416,21 @@ export default function TanzaniaStockDashboard() {
         </header>
 
         <main className="container mx-auto px-3 sm:px-6 py-4 sm:py-8">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-6">
             <Card
               className="hover-lift glass-effect border-primary/10 animate-slide-up"
               style={{ animationDelay: "0.1s" }}
             >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 sm:pb-3">
-                <CardTitle className="text-xs sm:text-sm font-medium font-heading">Market Cap</CardTitle>
-                <div className="p-1 sm:p-2 rounded-full bg-primary/10">
-                  <DollarSign className="h-3 w-3 sm:h-5 sm:w-5 text-primary" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 p-1.5 sm:p-2">
+                <CardTitle className="text-xs sm:text-xs font-medium font-body">Market Cap</CardTitle>
+                <div className="p-0.5 rounded-full bg-primary/10">
+                  <DollarSign className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-primary" />
                 </div>
               </CardHeader>
-              <CardContent className="pb-3 sm:pb-6">
-                <div className="text-sm sm:text-xl lg:text-2xl font-bold font-heading text-primary">
+              <CardContent className="pb-1.5 sm:pb-2 px-1.5 sm:px-2 pt-0">
+                <div className="text-xs sm:text-sm font-bold font-body text-primary">
                   {(totalMarketCap / 1000000000).toFixed(1)}B
                 </div>
-                <p className="text-xs text-muted-foreground font-body mt-1 hidden sm:block">
-                  Across {stockData.length} companies
-                </p>
               </CardContent>
             </Card>
 
@@ -377,17 +438,16 @@ export default function TanzaniaStockDashboard() {
               className="hover-lift glass-effect border-primary/10 animate-slide-up"
               style={{ animationDelay: "0.2s" }}
             >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 sm:pb-3">
-                <CardTitle className="text-xs sm:text-sm font-medium font-heading">Volume</CardTitle>
-                <div className="p-1 sm:p-2 rounded-full bg-secondary/10">
-                  <Activity className="h-3 w-3 sm:h-5 sm:w-5 text-secondary" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 p-1.5 sm:p-2">
+                <CardTitle className="text-xs sm:text-xs font-medium font-body">Volume</CardTitle>
+                <div className="p-0.5 rounded-full bg-secondary/10">
+                  <Activity className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-secondary" />
                 </div>
               </CardHeader>
-              <CardContent className="pb-3 sm:pb-6">
-                <div className="text-sm sm:text-xl lg:text-2xl font-bold text-secondary">
+              <CardContent className="pb-1.5 sm:pb-2 px-1.5 sm:px-2 pt-0">
+                <div className="text-xs sm:text-sm font-bold text-secondary font-body">
                   {(totalVolume / 1000).toFixed(0)}K
                 </div>
-                <p className="text-xs text-muted-foreground font-body mt-1 hidden sm:block">Shares traded</p>
               </CardContent>
             </Card>
 
@@ -396,15 +456,14 @@ export default function TanzaniaStockDashboard() {
                 className="hover-lift glass-effect border-primary/10 animate-slide-up cursor-pointer hover:border-primary/30 transition-all duration-300"
                 style={{ animationDelay: "0.3s" }}
               >
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 sm:pb-3">
-                  <CardTitle className="text-xs sm:text-sm font-medium font-heading">Gainers</CardTitle>
-                  <div className="p-1 sm:p-2 rounded-full bg-chart-3/10">
-                    <TrendingUp className="h-3 w-3 sm:h-5 sm:w-5 text-chart-3" />
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 p-1.5 sm:p-2">
+                  <CardTitle className="text-xs sm:text-xs font-medium font-body">Gainers</CardTitle>
+                  <div className="p-0.5 rounded-full bg-chart-3/10">
+                    <TrendingUp className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-chart-3" />
                   </div>
                 </CardHeader>
-                <CardContent className="pb-3 sm:pb-6">
-                  <div className="text-sm sm:text-xl lg:text-2xl font-bold text-chart-3 font-heading">{gainers}</div>
-                  <p className="text-xs text-muted-foreground font-body mt-1 hidden sm:block">View details →</p>
+                <CardContent className="pb-1.5 sm:pb-2 px-1.5 sm:px-2 pt-0">
+                  <div className="text-xs sm:text-sm font-bold text-chart-3 font-body">{gainers}</div>
                 </CardContent>
               </Card>
             </Link>
@@ -414,15 +473,14 @@ export default function TanzaniaStockDashboard() {
                 className="hover-lift glass-effect border-primary/10 animate-slide-up cursor-pointer hover:border-primary/30 transition-all duration-300"
                 style={{ animationDelay: "0.4s" }}
               >
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 sm:pb-3">
-                  <CardTitle className="text-xs sm:text-sm font-medium font-heading">Losers</CardTitle>
-                  <div className="p-1 sm:p-2 rounded-full bg-chart-5/10">
-                    <TrendingDown className="h-3 w-3 sm:h-5 sm:w-5 text-chart-5" />
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 p-1.5 sm:p-2">
+                  <CardTitle className="text-xs sm:text-xs font-medium font-body">Losers</CardTitle>
+                  <div className="p-0.5 rounded-full bg-chart-5/10">
+                    <TrendingDown className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-chart-5" />
                   </div>
                 </CardHeader>
-                <CardContent className="pb-3 sm:pb-6">
-                  <div className="text-sm sm:text-xl lg:text-2xl font-bold text-chart-5 font-heading">{losers}</div>
-                  <p className="text-xs text-muted-foreground font-body mt-1 hidden sm:block">View details →</p>
+                <CardContent className="pb-1.5 sm:pb-2 px-1.5 sm:px-2 pt-0">
+                  <div className="text-xs sm:text-sm font-bold text-chart-5 font-body">{losers}</div>
                 </CardContent>
               </Card>
             </Link>
@@ -447,7 +505,7 @@ export default function TanzaniaStockDashboard() {
           >
             <CardHeader className="border-b border-border/50 px-3 sm:px-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-                <CardTitle className="flex items-center space-x-2 font-heading text-sm sm:text-base">
+                <CardTitle className="flex items-center space-x-2 font-body text-sm sm:text-base">
                   <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   <span>Live Stock Prices</span>
                   {searchQuery && (
@@ -471,19 +529,34 @@ export default function TanzaniaStockDashboard() {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-border/50 bg-muted/30">
-                      <th className="text-left py-2 sm:py-4 px-2 sm:px-6 font-medium font-heading text-xs sm:text-sm">
-                        Symbol
+                    <tr className="border-b border-primary/20">
+                      {/* Symbol Column - Sort A-Z */}
+                      <th className="py-2 sm:py-3 px-2 sm:px-6">
+                        <div className="text-left font-medium font-body text-xs sm:text-sm">
+                          <SortIcon column="symbol" label="Symbol" />
+                        </div>
                       </th>
-                      <th className="text-right py-2 sm:py-4 px-2 sm:px-6 font-medium font-heading text-xs sm:text-sm">
-                        Price
+                      {/* Price Column - Sort High to Low */}
+                      <th className="py-2 sm:py-3 px-2 sm:px-4">
+                        <div className="text-right font-medium font-body text-xs sm:text-sm">
+                          <SortIcon column="price" label="Price" />
+                        </div>
                       </th>
-                      <th className="text-right py-2 sm:py-4 px-2 sm:px-6 font-medium font-heading text-xs sm:text-sm">
-                        Change
+                      {/* Change Column - Sort High to Low */}
+                      <th className="py-2 sm:py-3 px-2 sm:px-4">
+                        <div className="text-right font-medium font-body text-xs sm:text-sm">
+                          <SortIcon column="change" label="Change" />
+                        </div>
                       </th>
-                      <th className="text-right py-2 sm:py-4 px-2 sm:px-6 hidden sm:table-cell">Volume</th>
-                      <th className="text-right py-2 sm:py-4 px-2 sm:px-6 hidden lg:table-cell">Bid</th>
-                      <th className="text-right py-2 sm:py-4 px-2 sm:px-6 hidden lg:table-cell">Offer</th>
+                      <th className="text-right py-2 sm:py-3 px-2 sm:px-4 hidden sm:table-cell font-body text-xs sm:text-sm font-medium">
+                        <SortIcon column="volume" label="Volume" />
+                      </th>
+                      <th className="text-right py-2 sm:py-3 px-2 sm:px-4 hidden lg:table-cell font-body text-xs sm:text-sm font-medium">
+                        <SortIcon column="bestBidPrice" label="Bid" />
+                      </th>
+                      <th className="text-right py-2 sm:py-3 px-2 sm:px-4 hidden lg:table-cell font-body text-xs sm:text-sm font-medium">
+                        <SortIcon column="bestOfferPrice" label="Offer" />
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -510,8 +583,8 @@ export default function TanzaniaStockDashboard() {
                           </td>
                         </tr>
                       ))
-                    ) : filteredStocks.length > 0 ? (
-                      filteredStocks.map((stock, index) => (
+                    ) : displayedStocks.length > 0 ? (
+                      displayedStocks.map((stock, index) => (
                         <tr
                           key={stock.symbol}
                           className={`border-b border-border/30 hover:bg-primary/5 cursor-pointer transition-all duration-200 ${
@@ -520,7 +593,7 @@ export default function TanzaniaStockDashboard() {
                           onClick={() => handleStockClick(stock)}
                         >
                           <td className="py-2 sm:py-4 px-2 sm:px-6">
-                            <span className="font-medium font-heading text-primary text-xs sm:text-sm">
+                            <span className="font-medium font-body text-primary text-xs sm:text-sm">
                               {stock.symbol}
                             </span>
                           </td>
@@ -551,7 +624,7 @@ export default function TanzaniaStockDashboard() {
                         <td colSpan={6} className="py-8 text-center text-muted-foreground">
                           <div className="flex flex-col items-center space-y-2">
                             <Search className="h-8 w-8 text-muted-foreground/50" />
-                            <p className="text-sm">No stocks found matching "{searchQuery}"</p>
+                            <p className="text-sm">No stocks found matching your filters</p>
                           </div>
                         </td>
                       </tr>
@@ -569,11 +642,11 @@ export default function TanzaniaStockDashboard() {
           <div className="glass-effect border-b p-3 lg:p-4 flex-shrink-0 bg-background/95 backdrop-blur-sm z-20 relative">
             <div className="flex items-center justify-between mb-2 lg:mb-3">
               <div className="flex-1 mr-3">
-                <h2 className="text-base lg:text-lg font-bold text-foreground font-heading">{selectedStock.symbol}</h2>
+                <h2 className="text-base lg:text-lg font-bold text-foreground font-body">{selectedStock.symbol}</h2>
                 <p className="text-xs lg:text-sm text-muted-foreground font-body leading-tight mb-2">
                   {selectedStock.name}
                 </p>
-                <div className="text-lg lg:text-2xl font-bold font-heading text-primary">
+                <div className="text-lg lg:text-2xl font-bold font-body text-primary">
                   {selectedStock.price.toLocaleString()}
                 </div>
               </div>
@@ -588,13 +661,13 @@ export default function TanzaniaStockDashboard() {
               <div className="grid grid-cols-2 gap-2 lg:gap-3">
                 <Card className="glass-effect border-primary/10">
                   <CardHeader className="pb-1 lg:pb-2 p-2 lg:p-3">
-                    <CardTitle className="text-xs font-medium font-heading flex items-center">
+                    <CardTitle className="text-xs font-medium font-body flex items-center">
                       <TrendingUp className="h-3 w-3 text-chart-3 mr-1" />
                       Best Buy
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-2 lg:p-3 pt-0">
-                    <div className="text-sm lg:text-lg font-bold text-chart-3 font-heading">
+                    <div className="text-sm lg:text-lg font-bold text-chart-3 font-body">
                       {stockDetail.bestBuyPrice.toLocaleString()}
                     </div>
                   </CardContent>
@@ -602,13 +675,13 @@ export default function TanzaniaStockDashboard() {
 
                 <Card className="glass-effect border-primary/10">
                   <CardHeader className="pb-1 lg:pb-2 p-2 lg:p-3">
-                    <CardTitle className="text-xs font-medium font-heading flex items-center">
+                    <CardTitle className="text-xs font-medium font-body flex items-center">
                       <TrendingDown className="h-3 w-3 text-chart-5 mr-1" />
                       Best Sell
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-2 lg:p-3 pt-0">
-                    <div className="text-sm lg:text-lg font-bold text-chart-5 font-heading">
+                    <div className="text-sm lg:text-lg font-bold text-chart-5 font-body">
                       {stockDetail.bestSellPrice > 0 ? stockDetail.bestSellPrice.toLocaleString() : "N/A"}
                     </div>
                   </CardContent>
@@ -619,23 +692,25 @@ export default function TanzaniaStockDashboard() {
                 const orderStats = calculateOrderStats(stockDetail.orders)
                 return (
                   <div className="space-y-2 lg:space-y-3">
-                    <h3 className="text-sm lg:text-base font-semibold font-heading">Order Statistics</h3>
+                    <h3 className="text-sm lg:text-base font-semibold font-body">Order Statistics</h3>
 
                     <div className="grid grid-cols-2 gap-2 lg:gap-3">
                       <div className="p-2 lg:p-3 rounded-lg bg-chart-3/5 border border-chart-3/20">
-                        <div className="text-xs text-chart-3 font-medium">Buy Volume</div>
-                        <div className="text-sm lg:text-base font-bold text-chart-3">
+                        <div className="text-xs text-chart-3 font-medium font-body">Buy Volume</div>
+                        <div className="text-sm lg:text-base font-bold text-chart-3 font-body">
                           {orderStats.totalBuyQuantity.toLocaleString()}
                         </div>
-                        <div className="text-xs text-muted-foreground">Avg: {orderStats.avgBuyPrice.toFixed(0)}</div>
+                        <div className="text-xs text-muted-foreground font-body">
+                          Avg: {orderStats.avgBuyPrice.toFixed(0)}
+                        </div>
                       </div>
 
                       <div className="p-2 lg:p-3 rounded-lg bg-chart-5/5 border border-chart-5/20">
-                        <div className="text-xs text-chart-5 font-medium">Sell Volume</div>
-                        <div className="text-sm lg:text-base font-bold text-chart-5">
+                        <div className="text-xs text-chart-5 font-medium font-body">Sell Volume</div>
+                        <div className="text-sm lg:text-base font-bold text-chart-5 font-body">
                           {orderStats.totalSellQuantity.toLocaleString()}
                         </div>
-                        <div className="text-xs text-muted-foreground">
+                        <div className="text-xs text-muted-foreground font-body">
                           Avg: {orderStats.avgSellPrice > 0 ? orderStats.avgSellPrice.toFixed(0) : "N/A"}
                         </div>
                       </div>
@@ -650,7 +725,7 @@ export default function TanzaniaStockDashboard() {
             {stockDetail && (
               <div className="p-3 lg:p-4 pb-6 lg:pb-8">
                 <div className="space-y-2 lg:space-y-3">
-                  <h3 className="text-sm lg:text-base font-semibold font-heading flex items-center">
+                  <h3 className="text-sm lg:text-base font-semibold font-body flex items-center">
                     <Sparkles className="h-4 w-4 text-primary mr-2" />
                     Market Orders
                   </h3>
