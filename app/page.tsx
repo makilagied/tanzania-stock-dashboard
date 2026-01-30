@@ -526,7 +526,7 @@ export default function TanzaniaStockDashboard() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto lg:overflow-visible">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-primary/20">
