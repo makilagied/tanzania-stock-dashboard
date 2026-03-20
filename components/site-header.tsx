@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 const NAV = [
-  { href: "/", label: "Market", short: "Market" },
+  { href: "/", label: "Stocks", short: "Stocks" },
   { href: "/funds", label: "Funds & ETFs", short: "Funds" },
 ] as const
 

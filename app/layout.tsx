@@ -17,9 +17,9 @@ const sourceSansPro = Source_Sans_Pro({
 })
 
 export const metadata: Metadata = {
-  title: "Tanzania Stock Market Dashboard",
+  title: "Tanzania Investor's Dashboard",
   description: "Real-time stock market data from Dar es Salaam Stock Exchange",
-    generator: 'v0.app'
+    generator: 'makilagied'
 }
 
 export default function RootLayout({
