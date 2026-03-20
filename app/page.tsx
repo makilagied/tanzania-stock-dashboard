@@ -371,10 +371,11 @@ export default function HomePage() {
                       <Area
                         type="monotone"
                         dataKey="close"
-                        stroke="var(--color-primary)"
+                        stroke={isDarkMode ? "#10b981" : "#059669"}
                         fill="url(#chartGrad)"
-                        strokeWidth={1.5}
+                        strokeWidth={2.5}
                         dot={false}
+                        isAnimationActive={true}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
