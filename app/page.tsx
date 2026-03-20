@@ -102,6 +102,9 @@ export default function HomePage() {
   const [activeStock, setActiveStock] = useState<StockData | null>(null)
   const [activeOrderBook, setActiveOrderBook] = useState<OrderBook | null>(null)
   const [modalLoading, setModalLoading] = useState(false)
+  const [selectedOrderBook, setSelectedOrderBook] = useState<OrderBook | null>(null)
+  const [selectedOrderBookLoading, setSelectedOrderBookLoading] = useState(false)
+  const [openMarketCard, setOpenMarketCard] = useState<"movers" | "gainers" | "losers">("movers")
   const [sortKey, setSortKey] = useState<"symbol" | "price" | "change" | "volume">("volume")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
 
@@ -184,6 +187,23 @@ export default function HomePage() {
     } catch { /* silent */ }
   }
 
+  const fetchSelectedOrderBook = async (stockId: string) => {
+    try {
+      setSelectedOrderBookLoading(true)
+      const res = await fetch(`/api/market/orders/${encodeURIComponent(stockId)}`)
+      const payload = await res.json()
+      setSelectedOrderBook({
+        bestSellPrice: Number(payload?.bestSellPrice) || 0,
+        bestBuyPrice: Number(payload?.bestBuyPrice) || 0,
+        orders: Array.isArray(payload?.orders) ? payload.orders : [],
+      })
+    } catch {
+      setSelectedOrderBook({ bestSellPrice: 0, bestBuyPrice: 0, orders: [] })
+    } finally {
+      setSelectedOrderBookLoading(false)
+    }
+  }
+
   const openStockModal = async (stock: StockData) => {
     setActiveStock(stock)
     setModalLoading(true)
@@ -233,10 +253,14 @@ export default function HomePage() {
     if (selectedSymbol) fetchHistory(selectedSymbol, days)
   }, [selectedSymbol, days])
 
+  useEffect(() => {
+    if (selectedStock?.id) fetchSelectedOrderBook(selectedStock.id)
+  }, [selectedStock?.id])
+
   return (
     <div className="min-h-screen bg-background font-sans">
       {/* ── Header ── */}
-      <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-40 bg-background/95 shadow-sm backdrop-blur-sm">
         <div className="mx-auto flex h-13 max-w-[1600px] items-center gap-4 px-4 lg:px-6">
           {/* Brand */}
           <div className="flex shrink-0 items-center gap-2.5">
@@ -249,21 +273,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Index Pills */}
-          <div className="flex flex-1 items-center gap-1.5 overflow-x-auto scrollbar-hide">
-            {indices.map((idx) => (
-              <div
-                key={idx.code}
-                className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[10px]"
-              >
-                <span className="font-semibold">{idx.code}</span>
-                <span className="tabular-nums">{formatCompact(idx.closingPrice)}</span>
-                <span className={`tabular-nums font-medium ${idx.change >= 0 ? "text-chart-3" : "text-chart-5"}`}>
-                  {idx.change >= 0 ? "+" : ""}{idx.change.toFixed(2)}
-                </span>
-              </div>
-            ))}
-          </div>
+          <div className="flex-1" />
 
           {/* Actions */}
           <div className="flex shrink-0 items-center gap-1">
@@ -284,50 +294,45 @@ export default function HomePage() {
 
       {/* ── Main ── */}
       <main className="mx-auto max-w-[1600px] px-4 py-4 lg:px-6 lg:py-5">
-
-        {/* Summary Pills Row */}
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-[11px]">
-            <span className="text-muted-foreground">Stocks</span>
-            <span className="font-semibold">{stocks.length}</span>
-          </div>
-          <div className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-[11px]">
-            <span className="text-muted-foreground">Volume</span>
-            <span className="font-semibold tabular-nums">{formatCompact(totalVolume)}</span>
-          </div>
-          <div className="flex items-center gap-1.5 rounded-full border border-chart-3/30 bg-chart-3/10 px-3 py-1 text-[11px]">
-            <ArrowUpRight className="h-3 w-3 text-chart-3" />
-            <span className="font-semibold text-chart-3">{gainers.length} Gainers</span>
-          </div>
-          <div className="flex items-center gap-1.5 rounded-full border border-chart-5/30 bg-chart-5/10 px-3 py-1 text-[11px]">
-            <ArrowDownRight className="h-3 w-3 text-chart-5" />
-            <span className="font-semibold text-chart-5">{losers.length} Losers</span>
-          </div>
+        {/* Indices row below navbar */}
+        <div className="mb-4 flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          {indices.map((idx) => (
+            <button
+              key={idx.code}
+              type="button"
+              className="flex shrink-0 items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-[10px] shadow-sm transition-colors hover:shadow-md"
+            >
+              <span className="font-semibold">{idx.code}</span>
+              <span className="tabular-nums">{formatCount(idx.closingPrice)}</span>
+              <span className={`tabular-nums font-medium ${idx.change >= 0 ? "text-chart-3" : "text-chart-5"}`}>
+                {idx.change >= 0 ? "+" : ""}
+                {idx.change.toFixed(2)}
+              </span>
+            </button>
+          ))}
         </div>
 
         {/* ── Body Grid: Left (chart + movers) | Right (securities) ── */}
         <div className="grid gap-4 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px]">
 
           {/* LEFT COLUMN */}
-          <div className="flex flex-col gap-4">
+          <div className="flex h-[650px] flex-col gap-4">
 
             {/* Chart */}
-            <section className="rounded-xl border border-border bg-card">
-              <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <section className="flex min-h-0 flex-1 flex-col rounded-xl bg-card shadow-md">
+              <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm font-semibold">
-                    {selectedStock?.symbol ?? "—"}
-                    {selectedStock && (
-                      <span
-                        className={`ml-2 text-xs font-medium ${
-                          (selectedStock.change ?? 0) >= 0 ? "text-chart-3" : "text-chart-5"
-                        }`}
-                      >
-                        {selectedStock.change >= 0 ? "+" : ""}
-                        {selectedStock.changePercent?.toFixed(2)}%
+                  {selectedStock ? (
+                    <p className="text-sm font-semibold">
+                      {selectedStock.symbol} {formatPrice(selectedStock.price)}{" "}
+                      <span className={selectedStock.change >= 0 ? "text-chart-3" : "text-chart-5"}>
+                        ({selectedStock.change >= 0 ? "+" : ""}
+                        {selectedStock.changePercent.toFixed(2)}%)
                       </span>
-                    )}
-                  </p>
+                    </p>
+                  ) : (
+                    <p className="text-sm font-semibold">—</p>
+                  )}
                   <p className="text-[10px] text-muted-foreground">{selectedStock?.name ?? "Select a stock below"}</p>
                 </div>
                 <div className="flex gap-1">
@@ -346,7 +351,7 @@ export default function HomePage() {
                   ))}
                 </div>
               </div>
-              <div className="h-[200px] p-3">
+              <div className="min-h-0 flex-1 p-3">
                 {historyLoading ? (
                   <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Loading chart...</div>
                 ) : history.length > 0 ? (
@@ -387,58 +392,147 @@ export default function HomePage() {
               </div>
             </section>
 
-            {/* Top Movers + Top Losers */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              {/* Movers */}
-              <section className="rounded-xl border border-border bg-card">
-                <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
-                  <TrendingUp className="h-3.5 w-3.5 text-chart-3" />
-                  <p className="text-xs font-semibold">Top Movers</p>
+            {/* Order book + collapsible market cards */}
+            <div className="grid h-[370px] gap-4 lg:grid-cols-[1fr_300px]">
+              <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-card shadow-md">
+                <div className="flex items-center justify-between px-4 py-2.5">
+                  <p className="text-xs font-semibold">Order Book</p>
+                  <span className="text-[10px] text-muted-foreground">{selectedStock?.symbol ?? "—"}</span>
                 </div>
-                <div className="divide-y divide-border">
-                  {topMovers.slice(0, 5).map((m) => (
-                    <div key={m.company} className="flex items-center justify-between px-4 py-2">
-                      <div>
-                        <p className="text-xs font-medium">{m.company}</p>
-                        <p className="text-[10px] text-muted-foreground">Vol: {formatCompact(m.volume)}</p>
+                <div className="flex-1 min-h-0 space-y-3 overflow-auto p-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                  <div className="rounded-lg bg-muted/40 p-3 shadow-sm">
+                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Summary</p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-md bg-chart-3/10 p-2 shadow-sm">
+                        <p className="text-[10px] text-muted-foreground">Best Buy Price</p>
+                        <p className="text-xs font-semibold tabular-nums text-chart-3">
+                          {formatCompact(selectedOrderBook?.bestBuyPrice || 0)}
+                        </p>
                       </div>
-                      <p className="text-xs font-semibold tabular-nums">{formatCompact(m.price)}</p>
+                      <div className="rounded-md bg-chart-5/10 p-2 shadow-sm">
+                        <p className="text-[10px] text-muted-foreground">Best Sell Price</p>
+                        <p className="text-xs font-semibold tabular-nums text-chart-5">
+                          {formatCompact(selectedOrderBook?.bestSellPrice || 0)}
+                        </p>
+                      </div>
                     </div>
-                  ))}
-                  {topMovers.length === 0 && (
-                    <p className="px-4 py-4 text-center text-[11px] text-muted-foreground">No data</p>
-                  )}
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg bg-chart-3/10 p-3 shadow-sm">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-chart-3">Buy</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        Best: {formatCompact(selectedOrderBook?.bestBuyPrice || 0)}
+                      </span>
+                    </div>
+                    {selectedOrderBookLoading ? (
+                      <p className="text-[10px] text-muted-foreground">Loading...</p>
+                    ) : (
+                      <div className="max-h-48 divide-y divide-border overflow-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                        {(selectedOrderBook?.orders ?? []).filter((o) => o.buyQuantity > 0).map((order, idx) => (
+                          <div key={`selected-buy-${idx}`} className="flex justify-between py-1 text-[11px]">
+                            <span className="tabular-nums">{formatCompact(order.buyPrice)}</span>
+                            <span className="tabular-nums text-muted-foreground">{formatCount(order.buyQuantity)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="rounded-lg bg-chart-5/10 p-3 shadow-sm">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-chart-5">Sell</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        Best: {formatCompact(selectedOrderBook?.bestSellPrice || 0)}
+                      </span>
+                    </div>
+                    {selectedOrderBookLoading ? (
+                      <p className="text-[10px] text-muted-foreground">Loading...</p>
+                    ) : (
+                      <div className="max-h-48 divide-y divide-border overflow-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                        {(selectedOrderBook?.orders ?? []).filter((o) => o.sellQuantity > 0).map((order, idx) => (
+                          <div key={`selected-sell-${idx}`} className="flex justify-between py-1 text-[11px]">
+                            <span className="tabular-nums">{formatCompact(order.sellPrice)}</span>
+                            <span className="tabular-nums text-muted-foreground">{formatCount(order.sellQuantity)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  </div>
                 </div>
               </section>
 
-              {/* Losers */}
-              <section className="rounded-xl border border-border bg-card">
-                <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
-                  <TrendingDown className="h-3.5 w-3.5 text-chart-5" />
-                  <p className="text-xs font-semibold">Top Losers</p>
-                </div>
-                <div className="divide-y divide-border">
-                  {losers
-                    .sort((a, b) => a.changePercent - b.changePercent)
-                    .slice(0, 5)
-                    .map((s) => (
-                      <div
-                        key={s.id}
-                        className="flex cursor-pointer items-center justify-between px-4 py-2 hover:bg-muted/40"
-                        onClick={() => { setSelectedSymbol(s.symbol); openStockModal(s) }}
-                      >
-                        <div>
-                          <p className="text-xs font-medium">{s.symbol}</p>
-                          <p className="text-[10px] text-muted-foreground">{s.name}</p>
+              <section className="h-full min-h-0 space-y-2 overflow-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                <div className="rounded-xl bg-card shadow-md">
+                  <button
+                    type="button"
+                    onClick={() => setOpenMarketCard("movers")}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-xs font-semibold"
+                  >
+                    <TrendingUp className="h-3.5 w-3.5 text-chart-3" />
+                    Top Movers
+                  </button>
+                  {openMarketCard === "movers" && (
+                    <div className="divide-y divide-border border-t border-border">
+                      {topMovers.slice(0, 5).map((m) => (
+                        <div key={m.company} className="flex items-center justify-between px-4 py-2">
+                          <div>
+                            <p className="text-xs font-medium">{m.company}</p>
+                            <p className="text-[10px] text-muted-foreground">Vol: {formatCompact(m.volume)}</p>
+                          </div>
+                          <p className="text-xs font-semibold tabular-nums">{formatCompact(m.price)}</p>
                         </div>
-                        <span className="flex items-center gap-0.5 rounded-full bg-chart-5/10 px-1.5 py-0.5 text-[10px] font-medium text-chart-5">
-                          <ArrowDownRight className="h-2.5 w-2.5" />
-                          {Math.abs(s.changePercent).toFixed(2)}%
-                        </span>
-                      </div>
-                    ))}
-                  {losers.length === 0 && (
-                    <p className="px-4 py-4 text-center text-[11px] text-muted-foreground">No losers today</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl bg-card shadow-md">
+                  <button
+                    type="button"
+                    onClick={() => setOpenMarketCard("gainers")}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-xs font-semibold"
+                  >
+                    <TrendingUp className="h-3.5 w-3.5 text-chart-3" />
+                    Top Gainers
+                  </button>
+                  {openMarketCard === "gainers" && (
+                    <div className="divide-y divide-border border-t border-border">
+                      {gainers.sort((a, b) => b.changePercent - a.changePercent).slice(0, 5).map((s) => (
+                        <div key={s.id} className="flex cursor-pointer items-center justify-between px-4 py-2 hover:bg-muted/40" onClick={() => { setSelectedSymbol(s.symbol); openStockModal(s) }}>
+                          <div>
+                            <p className="text-xs font-medium">{s.symbol}</p>
+                            <p className="text-[10px] text-muted-foreground">{s.name}</p>
+                          </div>
+                          <span className="text-[10px] font-medium text-chart-3">{Math.abs(s.change).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl bg-card shadow-md">
+                  <button
+                    type="button"
+                    onClick={() => setOpenMarketCard("losers")}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-xs font-semibold"
+                  >
+                    <TrendingDown className="h-3.5 w-3.5 text-chart-5" />
+                    Top Losers
+                  </button>
+                  {openMarketCard === "losers" && (
+                    <div className="divide-y divide-border border-t border-border">
+                      {losers.sort((a, b) => a.changePercent - b.changePercent).slice(0, 5).map((s) => (
+                        <div key={s.id} className="flex cursor-pointer items-center justify-between px-4 py-2 hover:bg-muted/40" onClick={() => { setSelectedSymbol(s.symbol); openStockModal(s) }}>
+                          <div>
+                            <p className="text-xs font-medium">{s.symbol}</p>
+                            <p className="text-[10px] text-muted-foreground">{s.name}</p>
+                          </div>
+                          <span className="text-[10px] font-medium text-chart-5">{Math.abs(s.change).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </section>
@@ -446,9 +540,9 @@ export default function HomePage() {
           </div>
 
           {/* RIGHT COLUMN — All Securities */}
-          <section className="flex flex-col rounded-xl border border-border bg-card">
+          <section className="flex h-[650px] flex-col rounded-xl bg-card shadow-md">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex items-center justify-between px-4 py-3">
               <div>
                 <p className="text-sm font-semibold">All Securities</p>
                 <p className="text-[10px] text-muted-foreground">{visibleStocks.length} / {stocks.length} listed</p>
@@ -465,7 +559,7 @@ export default function HomePage() {
             </div>
 
             {/* Table */}
-            <div className="flex-1 overflow-auto">
+            <div className="flex-1 overflow-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
               <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-muted/60 backdrop-blur-sm">
                   <tr className="border-b border-border text-left">
@@ -514,7 +608,7 @@ export default function HomePage() {
                     visibleStocks.map((stock) => (
                       <tr
                         key={stock.id}
-                        onClick={() => { setSelectedSymbol(stock.symbol); openStockModal(stock) }}
+                        onClick={() => { setSelectedSymbol(stock.symbol) }}
                         className={`cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-muted/40 ${
                           selectedSymbol === stock.symbol ? "bg-primary/5" : ""
                         }`}
@@ -539,7 +633,8 @@ export default function HomePage() {
                             ) : (
                               <ArrowDownRight className="h-2.5 w-2.5" />
                             )}
-                            {Math.abs(stock.changePercent).toFixed(2)}%
+                            {stock.change >= 0 ? "+" : ""}
+                            {stock.change.toFixed(2)}
                           </span>
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
