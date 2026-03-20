@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import { Activity, ChartCandlestick, Moon, RefreshCw, Sun, X } from "lucide-react"
+import { Activity, BarChart3, Moon, RefreshCw, Sun, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -208,7 +208,7 @@ export default function HomePage() {
       <header className="sticky top-0 z-30 border-b border-border bg-background">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <ChartCandlestick className="h-5 w-5 text-primary" />
+            <BarChart3 className="h-5 w-5 text-primary" />
             <h1 className="text-lg font-semibold">DSE Single Page Dashboard</h1>
           </div>
           <div className="flex items-center gap-2">
