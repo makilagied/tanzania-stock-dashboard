@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { SiteFooter } from "@/components/site-footer"
+import { SiteHeader } from "@/components/site-header"
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import {
   ArrowDownRight,
@@ -260,46 +262,29 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background font-sans">
-      {/* ── Header ── */}
-      <header className="sticky top-0 z-40 bg-background/95 shadow-sm backdrop-blur-sm">
-        <div className="mx-auto flex h-13 max-w-[1600px] items-center gap-4 px-4 lg:px-6">
-          {/* Brand */}
-          <div className="flex shrink-0 items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary">
-              <BarChart3 className="h-3.5 w-3.5 text-primary-foreground" />
-            </div>
-            <div className="hidden sm:block">
-              <p className="text-xs font-semibold leading-none">DSE Market</p>
-              <p className="text-[10px] text-muted-foreground">Dar es Salaam Stock Exchange</p>
-            </div>
-          </div>
-
-          <div className="flex-1" />
-
-          {/* Actions */}
-          <div className="flex shrink-0 items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-[11px] lg:hidden"
-              onClick={() => setIsStocksSidebarOpen(true)}
-            >
-              Stocks
-            </Button>
-            {lastUpdated && (
-              <span className="hidden text-[10px] text-muted-foreground xl:block">
-                {lastUpdated.toLocaleTimeString()}
-              </span>
-            )}
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={toggleDarkMode}>
-              {isDarkMode ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-            </Button>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={fetchStocks} disabled={loading}>
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            </Button>
-          </div>
-        </div>
-      </header>
+      <SiteHeader
+        icon={BarChart3}
+        title="DSE Market"
+        subtitle="Dar es Salaam Stock Exchange"
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-[11px] lg:hidden"
+          onClick={() => setIsStocksSidebarOpen(true)}
+        >
+          Stocks
+        </Button>
+        {lastUpdated && (
+          <span className="hidden text-[10px] text-muted-foreground xl:block">{lastUpdated.toLocaleTimeString()}</span>
+        )}
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={toggleDarkMode}>
+          {isDarkMode ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+        </Button>
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={fetchStocks} disabled={loading}>
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+        </Button>
+      </SiteHeader>
 
       {/* ── Main ── */}
       <main className="mx-auto max-w-[1600px] px-4 py-4 lg:px-6 lg:py-5">
@@ -831,29 +816,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Footer with Credits */}
-      <footer className="border-t border-border/50 bg-background/50 backdrop-blur-sm p-4 mt-8">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
-          <div className="text-sm text-muted-foreground">
-            Tanzania Stock Market Dashboard
-          </div>
-          <div className="text-sm text-muted-foreground flex flex-wrap justify-center sm:justify-end gap-4">
-            <span>Built by <span className="font-semibold text-foreground">Erick D Makilagi</span></span>
-            <span>•</span>
-            <a href="https://github.com/makilagied" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
-              GitHub
-            </a>
-            <span>•</span>
-            <a href="https://www.linkedin.com/in/makilagied" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
-              LinkedIn
-            </a>
-            <span>•</span>
-            <a href="https://snippe.me/pay/makilagied" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
-              Buy me a coffee
-            </a>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }
