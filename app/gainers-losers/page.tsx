@@ -1,166 +1,101 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import { TrendingUp, TrendingDown, RefreshCw, BarChart3, ArrowLeft, Moon, Sun } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  ChartCandlestick,
+  Moon,
+  RefreshCw,
+  Sun,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
-interface StockData {
-  id?: string
+type StockData = {
+  id: string
   symbol: string
   name: string
   price: number
   change: number
   changePercent: number
   volume: number
-  marketCap?: number
-  high?: number
-  low?: number
-  bestBidPrice?: number
-  bestOfferPrice?: number
-  openingPrice?: number
+}
+
+type HistoryPoint = {
+  date: string
+  close: number
+  volume: number
+}
+
+type ChartTooltipProps = {
+  active?: boolean
+  payload?: Array<{ payload: HistoryPoint }>
+}
+
+type StockOrder = {
+  buyPrice: number
+  buyQuantity: number
+  sellPrice: number
+  sellQuantity: number
+}
+
+type OrderBook = {
+  bestSellPrice: number
+  bestBuyPrice: number
+  orders: StockOrder[]
+}
+
+const formatPrice = (value: number) =>
+  new Intl.NumberFormat("en-TZ", {
+    style: "currency",
+    currency: "TZS",
+    maximumFractionDigits: 0,
+  }).format(value)
+
+const formatCompact = (value: number) =>
+  new Intl.NumberFormat("en-TZ", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value)
+
+const HistoryTooltip = ({ active, payload }: ChartTooltipProps) => {
+  if (!active || !payload || payload.length === 0) return null
+  const point = payload[0].payload
+  return (
+    <div className="rounded-md border border-border bg-background p-2 text-xs shadow-sm">
+      <p className="text-muted-foreground">Date: {point.date}</p>
+      <p>Close: {formatPrice(point.close)}</p>
+      <p>Volume: {new Intl.NumberFormat("en-TZ").format(point.volume)}</p>
+    </div>
+  )
 }
 
 export default function GainersLosersPage() {
-  const [stockData, setStockData] = useState<StockData[]>([])
+  const [stocks, setStocks] = useState<StockData[]>([])
   const [loading, setLoading] = useState(true)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [isDarkMode, setIsDarkMode] = useState(false)
-
-  const fetchStockData = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-
-      const response = await fetch("https://api.dse.co.tz/api/market-data?isBond=false")
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
-      const data = await response.json()
-
-      const transformedData: StockData[] = data.map((item: any) => ({
-        id: item.id || item.security?.id || item.companyId || item.symbol,
-        symbol: item.security?.symbol || item.company?.symbol || "N/A",
-        name: item.security?.securityDesc || item.company?.name || "Unknown Company",
-        price: item.marketPrice || item.openingPrice || 0,
-        change: item.change || 0,
-        changePercent: item.percentageChange || 0,
-        volume: item.volume || 0,
-        marketCap: item.marketCap || undefined,
-        high: item.high || undefined,
-        low: item.low || undefined,
-        bestBidPrice: item.bestBidPrice || undefined,
-        bestOfferPrice: item.bestOfferPrice || undefined,
-        openingPrice: item.openingPrice || undefined,
-      }))
-
-      setStockData(transformedData)
-      setLastUpdated(new Date())
-    } catch (err) {
-      console.error("Error fetching stock data:", err)
-      setError("Failed to fetch market data. Please try again.")
-
-      const mockData: StockData[] = [
-        {
-          id: "1",
-          symbol: "MCB",
-          name: "MWALIMU COMMERCIAL BANK PLC",
-          price: 360.0,
-          change: 15.0,
-          changePercent: 4.35,
-          volume: 45000,
-          marketCap: 22256971200,
-          bestBidPrice: 350.0,
-          bestOfferPrice: 365.0,
-          openingPrice: 345.0,
-        },
-        {
-          id: "2",
-          symbol: "VODA",
-          name: "VODACOM TANZANIA PUBLIC LIMITED COMPANY",
-          price: 600.0,
-          change: 25.0,
-          changePercent: 4.35,
-          volume: 11983,
-          marketCap: 45000000000,
-          bestBidPrice: 595.0,
-          bestOfferPrice: 600.0,
-          openingPrice: 575.0,
-        },
-        {
-          id: "3",
-          symbol: "CRDB",
-          name: "CRDB BANK PLC",
-          price: 185.0,
-          change: 12.0,
-          changePercent: 6.94,
-          volume: 125000,
-          marketCap: 18500000000,
-          bestBidPrice: 180.0,
-          bestOfferPrice: 185.0,
-          openingPrice: 173.0,
-        },
-        {
-          id: "4",
-          symbol: "NMB",
-          name: "NMB BANK PLC",
-          price: 2850.0,
-          change: -75.0,
-          changePercent: -2.56,
-          volume: 85000,
-          marketCap: 28500000000,
-          bestBidPrice: 2800.0,
-          bestOfferPrice: 2850.0,
-          openingPrice: 2925.0,
-        },
-        {
-          id: "5",
-          symbol: "TCC",
-          name: "TANZANIA CIGARETTE COMPANY LIMITED",
-          price: 3500.0,
-          change: -125.0,
-          changePercent: -3.45,
-          volume: 32000,
-          marketCap: 35000000000,
-          bestBidPrice: 3450.0,
-          bestOfferPrice: 3500.0,
-          openingPrice: 3625.0,
-        },
-        {
-          id: "6",
-          symbol: "SWIS",
-          name: "SWISSPORT TANZANIA LIMITED",
-          price: 1200.0,
-          change: -45.0,
-          changePercent: -3.61,
-          volume: 18000,
-          marketCap: 12000000000,
-          bestBidPrice: 1180.0,
-          bestOfferPrice: 1200.0,
-          openingPrice: 1245.0,
-        },
-      ]
-      setStockData(mockData)
-      setLastUpdated(new Date())
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [selectedStockId, setSelectedStockId] = useState<string>("")
+  const [selectedSymbol, setSelectedSymbol] = useState<string>("")
+  const [history, setHistory] = useState<HistoryPoint[]>([])
+  const [orderBook, setOrderBook] = useState<OrderBook | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [days, setDays] = useState(30)
 
   const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode)
+    setIsDarkMode((prev) => !prev)
     document.documentElement.classList.toggle("dark")
   }
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme")
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
-
     if (savedTheme === "dark" || (!savedTheme && prefersDark)) {
       setIsDarkMode(true)
       document.documentElement.classList.add("dark")
@@ -171,256 +106,337 @@ export default function GainersLosersPage() {
     localStorage.setItem("theme", isDarkMode ? "dark" : "light")
   }, [isDarkMode])
 
-  useEffect(() => {
-    fetchStockData()
+  const fetchStocks = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await fetch("/api/market/movers")
+      const payload = await response.json()
+      const rows: StockData[] = Array.isArray(payload?.data)
+        ? payload.data.map((item: any) => ({
+            id: String(item.company),
+            symbol: String(item.company),
+            name: String(item.company),
+            price: Number(item.price) || 0,
+            change: Number(item.change) || 0,
+            changePercent: Number(item.change) || 0,
+            volume: Number(item.volume) || 0,
+          }))
+        : []
+      setStocks(rows)
+      if (rows.length > 0 && !selectedStockId) {
+        setSelectedStockId(rows[0].id)
+        setSelectedSymbol(rows[0].symbol)
+      }
+      setLastUpdated(new Date())
+    } catch {
+      setError("Unable to fetch gainers and losers right now.")
+    } finally {
+      setLoading(false)
+    }
+  }
 
-    const interval = setInterval(fetchStockData, 120000)
+  const fetchHistory = async (symbol: string, rangeDays: number) => {
+    try {
+      const response = await fetch(`/api/market/history/${encodeURIComponent(symbol)}?days=${rangeDays}`)
+      const payload = await response.json()
+      setHistory(Array.isArray(payload?.data) ? payload.data : [])
+    } catch {
+      setHistory([])
+    }
+  }
+
+  const fetchOrders = async (stockId: string) => {
+    try {
+      setDetailLoading(true)
+      const response = await fetch(`/api/market/orders/${encodeURIComponent(stockId)}`)
+      const payload = await response.json()
+      setOrderBook({
+        bestSellPrice: Number(payload?.bestSellPrice) || 0,
+        bestBuyPrice: Number(payload?.bestBuyPrice) || 0,
+        orders: Array.isArray(payload?.orders) ? payload.orders : [],
+      })
+    } catch {
+      setOrderBook({ bestSellPrice: 0, bestBuyPrice: 0, orders: [] })
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchStocks()
+    const interval = setInterval(fetchStocks, 120000)
     return () => clearInterval(interval)
   }, [])
 
-  const gainers = stockData.filter((stock) => stock.change > 0).sort((a, b) => b.change - a.change)
-  const losers = stockData.filter((stock) => stock.change < 0).sort((a, b) => a.change - b.change)
+  useEffect(() => {
+    if (selectedSymbol) fetchHistory(selectedSymbol, days)
+  }, [selectedSymbol, days])
 
-  const formatNumber = (value: number) => {
-    return new Intl.NumberFormat("en-TZ").format(value)
-  }
+  useEffect(() => {
+    if (selectedStockId) fetchOrders(selectedStockId)
+  }, [selectedStockId])
 
-  const StockTable = ({ stocks, type }: { stocks: StockData[]; type: "gainers" | "losers" }) => (
-    <Card className="hover-lift glass-effect border-primary/10">
-      <CardHeader className="border-b border-border/50 px-3 sm:px-6">
-        <CardTitle className="flex items-center space-x-2 font-heading text-sm sm:text-base">
-          {type === "gainers" ? (
-            <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-chart-3" />
-          ) : (
-            <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 text-chart-5" />
-          )}
-          <span>{type === "gainers" ? "Top Gainers" : "Top Losers"}</span>
-          <span className="text-xs sm:text-sm text-muted-foreground">({stocks.length})</span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border/50 bg-muted/30">
-                <th className="text-left py-2 sm:py-4 px-2 sm:px-6 font-medium font-heading text-xs sm:text-sm">
-                  Symbol
-                </th>
-                <th className="text-right py-2 sm:py-4 px-2 sm:px-6 font-medium font-heading text-xs sm:text-sm">
-                  Price
-                </th>
-                <th className="text-right py-2 sm:py-4 px-2 sm:px-6 font-medium font-heading text-xs sm:text-sm">
-                  Change
-                </th>
-                <th className="text-right py-2 sm:py-4 px-2 sm:px-6 font-medium font-heading text-xs sm:text-sm hidden sm:table-cell">
-                  Volume
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading
-                ? Array.from({ length: 3 }).map((_, index) => (
-                    <tr key={index} className="border-b border-border/30">
-                      <td className="py-2 sm:py-4 px-2 sm:px-6">
-                        <Skeleton className="h-3 sm:h-4 w-12 sm:w-16" />
-                      </td>
-                      <td className="py-2 sm:py-4 px-2 sm:px-6">
-                        <Skeleton className="h-3 sm:h-4 w-16 sm:w-20" />
-                      </td>
-                      <td className="py-2 sm:py-4 px-2 sm:px-6">
-                        <Skeleton className="h-3 sm:h-4 w-12 sm:w-16" />
-                      </td>
-                      <td className="py-2 sm:py-4 px-2 sm:px-6 hidden sm:table-cell">
-                        <Skeleton className="h-3 sm:h-4 w-16 sm:w-20" />
-                      </td>
-                    </tr>
-                  ))
-                : stocks.map((stock, index) => (
-                    <tr
-                      key={stock.symbol}
-                      className={`border-b border-border/30 hover:bg-primary/5 transition-all duration-200 ${
-                        index % 2 === 0 ? "bg-muted/10" : ""
-                      }`}
-                    >
-                      <td className="py-2 sm:py-4 px-2 sm:px-6">
-                        <span className="font-medium font-heading text-primary text-xs sm:text-sm">{stock.symbol}</span>
-                      </td>
-                      <td className="py-2 sm:py-4 px-2 sm:px-6 text-right font-medium font-body text-xs sm:text-sm">
-                        {stock.price.toLocaleString()}
-                      </td>
-                      <td className="py-2 sm:py-4 px-2 sm:px-6 text-right">
-                        <span
-                          className={`font-medium font-body text-xs sm:text-sm ${
-                            stock.change >= 0 ? "text-chart-3" : "text-chart-5"
-                          }`}
-                        >
-                          {stock.change >= 0 ? "+" : ""}
-                          {stock.change.toLocaleString()}
-                        </span>
-                      </td>
-                      <td className="py-2 sm:py-4 px-2 sm:px-6 text-right text-xs text-muted-foreground font-body hidden sm:table-cell">
-                        {formatNumber(stock.volume)}
-                      </td>
-                    </tr>
-                  ))}
-            </tbody>
-          </table>
-        </div>
-        {!loading && stocks.length === 0 && (
-          <div className="p-6 sm:p-8 text-center text-muted-foreground">
-            <div className="text-sm sm:text-base">No {type} found</div>
-            <div className="text-xs sm:text-sm mt-1">All stocks are unchanged</div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
+  const gainers = useMemo(() => stocks.filter((stock) => stock.change > 0).sort((a, b) => b.change - a.change), [stocks])
+  const losers = useMemo(() => stocks.filter((stock) => stock.change < 0).sort((a, b) => a.change - b.change), [stocks])
+
+  const selectedStock = stocks.find((stock) => stock.id === selectedStockId) ?? null
+  const totalTrades = (orderBook?.orders ?? []).length
 
   return (
-    <div className="min-h-screen bg-background animate-fade-in">
-      <header className="glass-effect border-b shadow-lg sticky top-0 z-50">
-        <div className="container mx-auto px-3 sm:px-6 py-3 sm:py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3 sm:space-x-6">
-              <Link href="/">
-                <Button variant="ghost" size="sm" className="hover:bg-primary/10">
-                  <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
-                </Button>
-              </Link>
-              <div className="flex items-center space-x-2 sm:space-x-4">
-                <div className="p-2 sm:p-3 rounded-xl bg-gradient-to-br from-primary to-secondary shadow-lg">
-                  <BarChart3 className="h-5 w-5 sm:h-8 sm:w-8 text-white" />
-                </div>
-                <div className="animate-slide-up">
-                  <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold text-foreground font-heading">
-                    Gainers & Losers
-                  </h1>
-                  <p className="text-xs sm:text-sm text-muted-foreground font-body hidden sm:block">
-                    Market Performance Analysis
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2 sm:space-x-6">
-              {lastUpdated && (
-                <div className="text-right animate-scale-in hidden sm:block">
-                  <p className="text-xs text-muted-foreground font-body">Last updated</p>
-                  <p className="text-xs font-medium font-body">{lastUpdated.toLocaleTimeString()}</p>
-                </div>
-              )}
-              <Button
-                onClick={toggleDarkMode}
-                variant="outline"
-                size="sm"
-                className="flex items-center space-x-1 sm:space-x-2 hover-lift glass-effect border-primary/20 hover:border-primary/40 bg-transparent"
-              >
-                {isDarkMode ? <Sun className="h-3 w-3 sm:h-4 sm:w-4" /> : <Moon className="h-3 w-3 sm:h-4 sm:w-4" />}
-                <span className="hidden sm:inline">{isDarkMode ? "Light" : "Dark"}</span>
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-30 border-b border-border/60 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Link href="/">
+              <Button size="sm" variant="outline">
+                <ArrowLeft className="h-4 w-4" />
               </Button>
-              <Button
-                onClick={fetchStockData}
-                disabled={loading}
-                variant="outline"
-                size="sm"
-                className="flex items-center space-x-1 sm:space-x-2 hover-lift glass-effect border-primary/20 hover:border-primary/40 bg-transparent text-xs sm:text-sm"
-              >
-                <RefreshCw className={`h-3 w-3 sm:h-4 sm:w-4 ${loading ? "animate-spin" : ""}`} />
-                <span className="hidden sm:inline">Refresh</span>
-              </Button>
+            </Link>
+            <div className="rounded-xl bg-primary p-2 text-primary-foreground">
+              <ChartCandlestick className="h-5 w-5" />
             </div>
+            <div>
+              <h1 className="font-heading text-xl font-semibold">Market Movers</h1>
+              <p className="text-xs text-muted-foreground">Unified live + historical movers board</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={toggleDarkMode}>
+              {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+            <Button variant="outline" size="sm" onClick={fetchStocks} disabled={loading}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
           </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-3 sm:px-6 py-4 sm:py-8">
-        {error && (
-          <Card className="mb-6 border-destructive/50 bg-destructive/5 hover-lift animate-slide-up">
-            <CardContent className="pt-6">
-              <div className="flex items-center space-x-3 text-destructive">
-                <div className="p-2 rounded-full bg-destructive/10">
-                  <TrendingDown className="h-4 w-4" />
-                </div>
-                <p className="font-body">{error}</p>
-              </div>
-            </CardContent>
+      <main className="container mx-auto px-4 py-6 space-y-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Top Gainers</CardDescription>
+              <CardTitle className="text-chart-3">{gainers.length}</CardTitle>
+            </CardHeader>
           </Card>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
-          <div className="animate-slide-up" style={{ animationDelay: "0.1s" }}>
-            <StockTable stocks={gainers} type="gainers" />
-          </div>
-          <div className="animate-slide-up" style={{ animationDelay: "0.2s" }}>
-            <StockTable stocks={losers} type="losers" />
-          </div>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Top Losers</CardDescription>
+              <CardTitle className="text-chart-5">{losers.length}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Best Bid</CardDescription>
+              <CardTitle>{formatCompact(orderBook?.bestBuyPrice ?? 0)}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Best Offer</CardDescription>
+              <CardTitle>{formatCompact(orderBook?.bestSellPrice ?? 0)}</CardTitle>
+            </CardHeader>
+          </Card>
         </div>
 
-        <div className="mt-6 sm:mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6">
-          <Card
-            className="hover-lift glass-effect border-primary/10 animate-slide-up"
-            style={{ animationDelay: "0.3s" }}
-          >
-            <CardHeader className="pb-2 sm:pb-3">
-              <CardTitle className="text-xs sm:text-sm font-medium font-heading flex items-center">
-                <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-chart-3 mr-1 sm:mr-2" />
-                Gainers
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <Card className="xl:col-span-2">
+            <CardHeader>
+              <CardTitle>{selectedSymbol ? `${selectedSymbol} Movers Trend (${days}D)` : "Movers Trend"}</CardTitle>
+              <CardDescription>Historical price graph with live market context</CardDescription>
+              <div className="flex flex-wrap gap-2 pt-2">
+                {[30, 90, 180, 365, 1095].map((option) => (
+                  <Button
+                    key={option}
+                    size="sm"
+                    variant={days === option ? "default" : "outline"}
+                    onClick={() => setDays(option)}
+                  >
+                    {option}D
+                  </Button>
+                ))}
+              </div>
+            </CardHeader>
+            <CardContent className="h-[310px]">
+              {history.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={history}>
+                    <defs>
+                      <linearGradient id="moversFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0.04} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(value) => formatCompact(Number(value))} />
+                    <Tooltip content={<HistoryTooltip />} />
+                    <Area type="monotone" dataKey="close" stroke="var(--color-primary)" fill="url(#moversFill)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                  No historical graph data yet.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Order Book Snapshot</CardTitle>
+              <CardDescription>Buy and sell orders in the market</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg border border-chart-3/30 bg-chart-3/10 p-2">
+                  <p className="text-xs text-muted-foreground">Best Buy</p>
+                  <p className="font-semibold text-chart-3">{formatPrice(orderBook?.bestBuyPrice ?? 0)}</p>
+                </div>
+                <div className="rounded-lg border border-chart-5/30 bg-chart-5/10 p-2">
+                  <p className="text-xs text-muted-foreground">Best Sell</p>
+                  <p className="font-semibold text-chart-5">{formatPrice(orderBook?.bestSellPrice ?? 0)}</p>
+                </div>
+              </div>
+
+              <div className="max-h-[210px] overflow-y-auto space-y-2 pr-1">
+                {detailLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading order book...</p>
+                ) : (
+                  (orderBook?.orders ?? []).slice(0, 10).map((order, index) => (
+                    <div key={`${index}-${order.buyPrice}-${order.sellPrice}`} className="rounded-lg border border-border p-2 text-xs">
+                      <div className="flex justify-between text-chart-3">
+                        <span>Buy {formatCompact(order.buyPrice)}</span>
+                        <span>Qty {formatCompact(order.buyQuantity)}</span>
+                      </div>
+                      <div className="flex justify-between text-chart-5">
+                        <span>Sell {formatCompact(order.sellPrice)}</span>
+                        <span>Qty {formatCompact(order.sellQuantity)}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+                {!detailLoading && totalTrades === 0 && (
+                  <p className="text-sm text-muted-foreground">No visible orders for this stock right now.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-chart-3">
+                <TrendingUp className="h-4 w-4" />
+                Top Gainers
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-sm sm:text-xl lg:text-2xl font-bold text-chart-3 font-heading">{gainers.length}</div>
-              <p className="text-xs text-muted-foreground font-body mt-1 hidden sm:block">Stocks up</p>
+            <CardContent className="space-y-2">
+              {gainers.map((stock) => (
+                <button
+                  key={stock.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedStockId(stock.id)
+                    setSelectedSymbol(stock.symbol)
+                  }}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-left hover:border-primary/50"
+                >
+                  <div className="flex justify-between">
+                    <span className="font-medium">{stock.symbol}</span>
+                    <span className="text-chart-3">
+                      +{stock.change.toFixed(2)} ({stock.changePercent.toFixed(2)}%)
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">{stock.name}</p>
+                </button>
+              ))}
+              {!loading && gainers.length === 0 && <p className="text-sm text-muted-foreground">No gainers available.</p>}
             </CardContent>
           </Card>
 
-          <Card
-            className="hover-lift glass-effect border-primary/10 animate-slide-up"
-            style={{ animationDelay: "0.4s" }}
-          >
-            <CardHeader className="pb-2 sm:pb-3">
-              <CardTitle className="text-xs sm:text-sm font-medium font-heading flex items-center">
-                <TrendingDown className="h-3 w-3 sm:h-4 sm:w-4 text-chart-5 mr-1 sm:mr-2" />
-                Losers
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-chart-5">
+                <TrendingDown className="h-4 w-4" />
+                Top Losers
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-sm sm:text-xl lg:text-2xl font-bold text-chart-5 font-heading">{losers.length}</div>
-              <p className="text-xs text-muted-foreground font-body mt-1 hidden sm:block">Stocks down</p>
+            <CardContent className="space-y-2">
+              {losers.map((stock) => (
+                <button
+                  key={stock.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedStockId(stock.id)
+                    setSelectedSymbol(stock.symbol)
+                  }}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-left hover:border-primary/50"
+                >
+                  <div className="flex justify-between">
+                    <span className="font-medium">{stock.symbol}</span>
+                    <span className="text-chart-5">
+                      {stock.change.toFixed(2)} ({stock.changePercent.toFixed(2)}%)
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">{stock.name}</p>
+                </button>
+              ))}
+              {!loading && losers.length === 0 && <p className="text-sm text-muted-foreground">No losers available.</p>}
             </CardContent>
           </Card>
+        </div>
 
-          <Card
-            className="hover-lift glass-effect border-primary/10 animate-slide-up"
-            style={{ animationDelay: "0.5s" }}
-          >
-            <CardHeader className="pb-2 sm:pb-3">
-              <CardTitle className="text-xs sm:text-sm font-medium font-heading">Biggest Gain</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm sm:text-xl lg:text-2xl font-bold text-chart-3 font-heading">
-                {gainers.length > 0 ? `+${gainers[0].change.toLocaleString()}` : "0"}
+        <Card>
+          <CardHeader>
+            <CardTitle>Selected Stock Live Snapshot</CardTitle>
+            <CardDescription>Live market price and movement for the active stock</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {selectedStock ? (
+              <div className="flex flex-wrap items-center gap-6">
+                <div>
+                  <p className="text-xs text-muted-foreground">Symbol</p>
+                  <p className="font-semibold">{selectedStock.symbol}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Live Price</p>
+                  <p className="font-semibold">{formatPrice(selectedStock.price)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Change</p>
+                  <p className={selectedStock.change >= 0 ? "text-chart-3 font-semibold" : "text-chart-5 font-semibold"}>
+                    {selectedStock.change >= 0 ? "+" : ""}
+                    {selectedStock.change.toFixed(2)} ({selectedStock.changePercent.toFixed(2)}%)
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Volume</p>
+                  <p className="font-semibold">{formatCompact(selectedStock.volume)}</p>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground font-body mt-1 hidden sm:block">
-                {gainers.length > 0 ? gainers[0].symbol : "N/A"}
-              </p>
-            </CardContent>
-          </Card>
+            ) : (
+              <p className="text-sm text-muted-foreground">Choose a stock from gainers or losers to see details.</p>
+            )}
+          </CardContent>
+        </Card>
 
-          <Card
-            className="hover-lift glass-effect border-primary/10 animate-slide-up"
-            style={{ animationDelay: "0.6s" }}
-          >
-            <CardHeader className="pb-2 sm:pb-3">
-              <CardTitle className="text-xs sm:text-sm font-medium font-heading">Biggest Loss</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm sm:text-xl lg:text-2xl font-bold text-chart-5 font-heading">
-                {losers.length > 0 ? losers[0].change.toLocaleString() : "0"}
-              </div>
-              <p className="text-xs text-muted-foreground font-body mt-1 hidden sm:block">
-                {losers.length > 0 ? losers[0].symbol : "N/A"}
-              </p>
-            </CardContent>
-          </Card>
+        {(error || lastUpdated) && (
+          <p className="text-xs text-muted-foreground">
+            {error ? error : `Last updated at ${lastUpdated?.toLocaleTimeString()}`}
+          </p>
+        )}
+
+        <div className="pt-2">
+          <Link href="/">
+            <Button variant="outline">
+              Back To Main Dashboard
+              <ArrowUpRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
         </div>
       </main>
     </div>
