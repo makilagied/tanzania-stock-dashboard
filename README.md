@@ -28,3 +28,13 @@ Continue building your app on:
 2. Deploy your chats from the v0 interface
 3. Changes are automatically pushed to this repository
 4. Vercel deploys the latest version from this repository
+
+## Credits
+
+Built by **Erick D Makilagi**
+
+- **GitHub:** [makilagied](https://github.com/makilagied)
+- **LinkedIn:** [makilagied](https://www.linkedin.com/in/makilagied)
+- **Support:** [Buy me a coffee](https://snippe.me/pay/makilagied)
+
+If you find this project helpful, please consider supporting the developer!
