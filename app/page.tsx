@@ -672,6 +672,30 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+      {/* Footer with Credits */}
+      <footer className="border-t border-border/50 bg-background/50 backdrop-blur-sm p-4 mt-8">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+          <div className="text-sm text-muted-foreground">
+            Tanzania Stock Market Dashboard
+          </div>
+          <div className="text-sm text-muted-foreground flex flex-wrap justify-center sm:justify-end gap-4">
+            <span>Built by <span className="font-semibold text-foreground">Erick D Makilagi</span></span>
+            <span>•</span>
+            <a href="https://github.com/makilagied" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
+              GitHub
+            </a>
+            <span>•</span>
+            <a href="https://www.linkedin.com/in/makilagied" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
+              LinkedIn
+            </a>
+            <span>•</span>
+            <a href="https://snippe.me/pay/makilagied" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
+              Support
+            </a>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }
