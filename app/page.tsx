@@ -1,10 +1,9 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import { Activity, BarChart3, Moon, RefreshCw, Sun, X } from "lucide-react"
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { ArrowDownRight, ArrowUpRight, BarChart3, Moon, RefreshCw, Search, Sun, TrendingUp, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 
 type StockData = {
@@ -59,9 +58,7 @@ const formatPrice = (value: number) =>
   new Intl.NumberFormat("en-TZ", { style: "currency", currency: "TZS", maximumFractionDigits: 0 }).format(value)
 
 const formatCompact = (value: number) => {
-  if (Math.abs(value) < 100000) {
-    return new Intl.NumberFormat("en-TZ").format(value)
-  }
+  if (Math.abs(value) < 100000) return new Intl.NumberFormat("en-TZ").format(value)
   return new Intl.NumberFormat("en-TZ", { notation: "compact", maximumFractionDigits: 1 }).format(value)
 }
 
@@ -71,10 +68,9 @@ const HistoryTooltip = ({ active, payload }: ChartTooltipProps) => {
   if (!active || !payload || payload.length === 0) return null
   const point = payload[0].payload
   return (
-    <div className="rounded-md border border-border bg-background p-2 text-xs">
-      <p className="text-muted-foreground">Date: {point.date}</p>
-      <p>Close: {formatPrice(point.close)}</p>
-      <p>Volume: {formatCount(point.volume)}</p>
+    <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-lg">
+      <p className="font-medium">{point.date}</p>
+      <p className="text-muted-foreground">Close: {formatPrice(point.close)}</p>
     </div>
   )
 }
@@ -84,7 +80,6 @@ export default function HomePage() {
   const [history, setHistory] = useState<HistoryPoint[]>([])
   const [topMovers, setTopMovers] = useState<LiveMoverPoint[]>([])
   const [indices, setIndices] = useState<ShareIndexPoint[]>([])
-  const [indicesDate, setIndicesDate] = useState("")
   const [search, setSearch] = useState("")
   const [selectedSymbol, setSelectedSymbol] = useState("CRDB")
   const [days, setDays] = useState(90)
@@ -96,21 +91,35 @@ export default function HomePage() {
   const [activeStock, setActiveStock] = useState<StockData | null>(null)
   const [activeOrderBook, setActiveOrderBook] = useState<OrderBook | null>(null)
   const [modalLoading, setModalLoading] = useState(false)
+  const [sortKey, setSortKey] = useState<"symbol" | "price" | "change" | "volume">("volume")
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
 
   const selectedStock = stocks.find((stock) => stock.symbol === selectedSymbol) ?? null
   const totalMarketCap = stocks.reduce((sum, stock) => sum + (stock.marketCap ?? 0), 0)
   const totalVolume = stocks.reduce((sum, stock) => sum + stock.volume, 0)
-  const gainers = stocks.filter((stock) => stock.change > 0).length
+  const gainers = stocks.filter((stock) => stock.change > 0)
+  const losers = stocks.filter((stock) => stock.change < 0)
 
   const visibleStocks = useMemo(() => {
-    return stocks
-      .filter(
-        (stock) =>
-          stock.symbol.toLowerCase().includes(search.toLowerCase()) ||
-          stock.name.toLowerCase().includes(search.toLowerCase()),
-      )
-      .sort((a, b) => b.volume - a.volume)
-  }, [stocks, search])
+    const filtered = stocks.filter(
+      (stock) =>
+        stock.symbol.toLowerCase().includes(search.toLowerCase()) ||
+        stock.name.toLowerCase().includes(search.toLowerCase())
+    )
+    return filtered.sort((a, b) => {
+      const aVal = a[sortKey]
+      const bVal = b[sortKey]
+      if (typeof aVal === "string" && typeof bVal === "string") {
+        return sortDir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal)
+      }
+      return sortDir === "asc" ? Number(aVal) - Number(bVal) : Number(bVal) - Number(aVal)
+    })
+  }, [stocks, search, sortKey, sortDir])
+
+  const handleSort = (key: typeof sortKey) => {
+    if (sortKey === key) setSortDir(sortDir === "asc" ? "desc" : "asc")
+    else { setSortKey(key); setSortDir("desc") }
+  }
 
   const toggleDarkMode = () => {
     setIsDarkMode((prev) => !prev)
@@ -128,7 +137,7 @@ export default function HomePage() {
       if (rows.length > 0 && !rows.find((row) => row.symbol === selectedSymbol)) setSelectedSymbol(rows[0].symbol)
       setLastUpdated(new Date())
     } catch {
-      setError("Unable to fetch market data right now.")
+      setError("Unable to fetch market data.")
     } finally {
       setLoading(false)
     }
@@ -153,11 +162,10 @@ export default function HomePage() {
     setTopMovers(Array.isArray(payload?.data) ? payload.data : [])
   }
 
-  const fetchIndices = async (fromDate?: string) => {
-    const response = await fetch(`/api/market/indices${fromDate ? `?from=${fromDate}` : ""}`)
+  const fetchIndices = async () => {
+    const response = await fetch("/api/market/indices")
     const payload = await response.json()
     setIndices(Array.isArray(payload?.data) ? payload.data : [])
-    if (typeof payload?.from === "string") setIndicesDate(payload.from)
   }
 
   const openStockModal = async (stock: StockData) => {
@@ -205,207 +213,356 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-30 border-b border-border bg-background">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            <h1 className="text-lg font-semibold">DSE Single Page Dashboard</h1>
+      {/* Header */}
+      <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur-sm">
+        <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-4 lg:px-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+              <BarChart3 className="h-4 w-4 text-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="text-sm font-semibold tracking-tight">DSE Market</h1>
+              <p className="text-[10px] text-muted-foreground">Dar es Salaam Stock Exchange</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={toggleDarkMode}>
+            {lastUpdated && (
+              <span className="hidden text-[10px] text-muted-foreground sm:block">
+                Updated {lastUpdated.toLocaleTimeString()}
+              </span>
+            )}
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={toggleDarkMode}>
               {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
-            <Button variant="outline" size="sm" onClick={fetchStocks} disabled={loading}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              Refresh
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={fetchStocks} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-4 px-4 py-4">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Card><CardHeader className="pb-2"><CardDescription>Market Cap</CardDescription><CardTitle>{formatCompact(totalMarketCap)}</CardTitle></CardHeader></Card>
-          <Card><CardHeader className="pb-2"><CardDescription>Total Volume</CardDescription><CardTitle>{formatCompact(totalVolume)}</CardTitle></CardHeader></Card>
-          <Card><CardHeader className="pb-2"><CardDescription>Stocks</CardDescription><CardTitle>{stocks.length}</CardTitle></CardHeader></Card>
-          <Card><CardHeader className="pb-2"><CardDescription>Gainers</CardDescription><CardTitle className="text-chart-3">{gainers}</CardTitle></CardHeader></Card>
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-3">
-          <Card className="xl:col-span-2">
-            <CardHeader>
-              <CardTitle>{selectedStock ? `${selectedStock.symbol} Trend` : "Historical Trend"}</CardTitle>
-              <CardDescription>Click a stock to update the chart</CardDescription>
-              <div className="flex flex-wrap gap-2">
-                {[30, 90, 180, 365, 1095].map((option) => (
-                  <Button key={option} size="sm" variant={days === option ? "default" : "outline"} onClick={() => setDays(option)}>
-                    {option}D
-                  </Button>
-                ))}
+      <main className="mx-auto max-w-[1400px] px-4 py-4 lg:px-6 lg:py-6">
+        {/* Stats Row */}
+        <section className="mb-6">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="rounded-xl border border-border bg-card p-3">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Market Cap</p>
+              <p className="text-lg font-semibold tabular-nums">{formatCompact(totalMarketCap)}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-3">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Volume</p>
+              <p className="text-lg font-semibold tabular-nums">{formatCompact(totalVolume)}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Gainers</p>
+                <ArrowUpRight className="h-3 w-3 text-chart-3" />
               </div>
-            </CardHeader>
-            <CardContent className="h-[300px]">
-              {history.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={history}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(value) => formatCompact(Number(value))} />
-                    <Tooltip content={<HistoryTooltip />} />
-                    <Area type="monotone" dataKey="close" stroke="var(--color-primary)" fill="var(--color-primary)" fillOpacity={0.15} strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                  {historyLoading ? "Loading chart..." : "No historical data."}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Activity className="h-4 w-4" />Watchlist</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
-              <div className="max-h-[300px] space-y-1 overflow-y-auto">
-                {visibleStocks.map((stock) => (
-                  <button
-                    key={stock.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedSymbol(stock.symbol)
-                      openStockModal(stock)
-                    }}
-                    className="w-full rounded-md border border-border px-3 py-2 text-left hover:bg-muted"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{stock.symbol}</span>
-                      <span className={stock.change >= 0 ? "text-chart-3 text-xs" : "text-chart-5 text-xs"}>
-                        {stock.change >= 0 ? "+" : ""}{stock.changePercent.toFixed(2)}%
-                      </span>
-                    </div>
-                    <p className="truncate text-xs text-muted-foreground">{stock.name}</p>
-                  </button>
-                ))}
+              <p className="text-lg font-semibold tabular-nums text-chart-3">{gainers.length}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Losers</p>
+                <ArrowDownRight className="h-3 w-3 text-chart-5" />
               </div>
-            </CardContent>
-          </Card>
-        </div>
+              <p className="text-lg font-semibold tabular-nums text-chart-5">{losers.length}</p>
+            </div>
+          </div>
+        </section>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <div className="flex items-end justify-between gap-2">
+        {/* Main Grid */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Left Column - Chart & Table */}
+          <div className="space-y-6 lg:col-span-2">
+            {/* Chart Section */}
+            <section className="rounded-xl border border-border bg-card">
+              <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <CardTitle>Share Indices</CardTitle>
-                  <CardDescription>Hover any card for quick details</CardDescription>
+                  <h2 className="text-sm font-semibold">{selectedStock?.symbol || "Select Stock"}</h2>
+                  <p className="text-xs text-muted-foreground">{selectedStock?.name || "Historical price trend"}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Input type="date" className="w-[160px]" value={indicesDate} onChange={(e) => setIndicesDate(e.target.value)} />
-                  <Button size="sm" variant="outline" onClick={() => fetchIndices(indicesDate)}>Load</Button>
+                <div className="flex gap-1">
+                  {[30, 90, 180, 365].map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setDays(d)}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                        days === d
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      }`}
+                    >
+                      {d}D
+                    </button>
+                  ))}
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {indices.map((item) => (
-                <div key={item.code} className="group relative rounded-md border border-border p-3">
-                  <p className="text-xs text-muted-foreground">{item.code}</p>
-                  <p className="text-sm font-medium">{item.indexDescription}</p>
-                  <p className="text-sm font-semibold">{formatCompact(item.closingPrice)}</p>
-                  <p className={item.change >= 0 ? "text-chart-3 text-xs" : "text-chart-5 text-xs"}>
-                    {item.change >= 0 ? "+" : ""}{item.change.toFixed(2)}
-                  </p>
-                  <div className="pointer-events-none absolute right-2 top-2 rounded bg-muted px-2 py-1 text-[10px] opacity-0 transition group-hover:opacity-100">
-                    Flat view
+              <div className="h-[220px] p-4">
+                {history.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={history} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.15} />
+                          <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="date" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} dy={8} />
+                      <YAxis
+                        tick={{ fontSize: 10 }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(v) => formatCompact(Number(v))}
+                        dx={-8}
+                        width={50}
+                      />
+                      <Tooltip content={<HistoryTooltip />} />
+                      <Area
+                        type="monotone"
+                        dataKey="close"
+                        stroke="var(--color-primary)"
+                        fill="url(#chartGradient)"
+                        strokeWidth={1.5}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                    {historyLoading ? "Loading chart..." : "No historical data available"}
                   </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+                )}
+              </div>
+            </section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Top Movers</CardTitle>
-              <CardDescription>Click watchlist items for modal details</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {topMovers.map((item) => (
-                <div key={item.company} className="rounded-md border border-border p-3">
-                  <p className="font-medium">{item.company}</p>
-                  <p className="text-sm">{formatPrice(item.price)}</p>
-                  <p className="text-xs text-muted-foreground">Volume: {formatCount(item.volume)}</p>
+            {/* Stocks Table */}
+            <section className="rounded-xl border border-border bg-card">
+              <div className="flex items-center justify-between border-b border-border p-4">
+                <div>
+                  <h2 className="text-sm font-semibold">All Securities</h2>
+                  <p className="text-xs text-muted-foreground">{stocks.length} listed stocks</p>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
+                <div className="relative w-40">
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="h-8 pl-8 text-xs"
+                  />
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border text-left">
+                      <th
+                        className="cursor-pointer px-4 py-2.5 font-medium text-muted-foreground hover:text-foreground"
+                        onClick={() => handleSort("symbol")}
+                      >
+                        Symbol {sortKey === "symbol" && (sortDir === "asc" ? "↑" : "↓")}
+                      </th>
+                      <th
+                        className="cursor-pointer px-4 py-2.5 text-right font-medium text-muted-foreground hover:text-foreground"
+                        onClick={() => handleSort("price")}
+                      >
+                        Price {sortKey === "price" && (sortDir === "asc" ? "↑" : "↓")}
+                      </th>
+                      <th
+                        className="cursor-pointer px-4 py-2.5 text-right font-medium text-muted-foreground hover:text-foreground"
+                        onClick={() => handleSort("change")}
+                      >
+                        Change {sortKey === "change" && (sortDir === "asc" ? "↑" : "↓")}
+                      </th>
+                      <th
+                        className="cursor-pointer px-4 py-2.5 text-right font-medium text-muted-foreground hover:text-foreground"
+                        onClick={() => handleSort("volume")}
+                      >
+                        Volume {sortKey === "volume" && (sortDir === "asc" ? "↑" : "↓")}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleStocks.map((stock) => (
+                      <tr
+                        key={stock.id}
+                        onClick={() => {
+                          setSelectedSymbol(stock.symbol)
+                          openStockModal(stock)
+                        }}
+                        className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/50"
+                      >
+                        <td className="px-4 py-2.5">
+                          <p className="font-medium">{stock.symbol}</p>
+                          <p className="truncate text-[10px] text-muted-foreground">{stock.name}</p>
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-medium tabular-nums">
+                          {formatCompact(stock.price)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <span
+                            className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                              stock.change >= 0 ? "bg-gain" : "bg-loss"
+                            }`}
+                          >
+                            {stock.change >= 0 ? (
+                              <ArrowUpRight className="h-2.5 w-2.5" />
+                            ) : (
+                              <ArrowDownRight className="h-2.5 w-2.5" />
+                            )}
+                            {Math.abs(stock.changePercent).toFixed(2)}%
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
+                          {formatCompact(stock.volume)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          {/* Right Column - Sidebar */}
+          <div className="space-y-6">
+            {/* Indices */}
+            <section className="rounded-xl border border-border bg-card">
+              <div className="border-b border-border p-4">
+                <h2 className="text-sm font-semibold">Market Indices</h2>
+                <p className="text-xs text-muted-foreground">DSE performance indicators</p>
+              </div>
+              <div className="divide-y divide-border">
+                {indices.slice(0, 4).map((idx) => (
+                  <div key={idx.code} className="flex items-center justify-between p-4">
+                    <div>
+                      <p className="text-xs font-medium">{idx.code}</p>
+                      <p className="text-[10px] text-muted-foreground">{idx.indexDescription}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-semibold tabular-nums">{formatCompact(idx.closingPrice)}</p>
+                      <p className={`text-[10px] tabular-nums ${idx.change >= 0 ? "text-chart-3" : "text-chart-5"}`}>
+                        {idx.change >= 0 ? "+" : ""}
+                        {idx.change.toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Top Movers */}
+            <section className="rounded-xl border border-border bg-card">
+              <div className="flex items-center gap-2 border-b border-border p-4">
+                <TrendingUp className="h-4 w-4 text-chart-3" />
+                <div>
+                  <h2 className="text-sm font-semibold">Top Movers</h2>
+                  <p className="text-xs text-muted-foreground">Most active today</p>
+                </div>
+              </div>
+              <div className="divide-y divide-border">
+                {topMovers.slice(0, 5).map((mover) => (
+                  <div key={mover.company} className="flex items-center justify-between p-4">
+                    <div>
+                      <p className="text-xs font-medium">{mover.company}</p>
+                      <p className="text-[10px] text-muted-foreground">Vol: {formatCompact(mover.volume)}</p>
+                    </div>
+                    <p className="text-xs font-semibold tabular-nums">{formatPrice(mover.price)}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
         </div>
 
-        {(error || lastUpdated) && (
-          <p className="text-xs text-muted-foreground">{error ? error : `Last updated ${lastUpdated?.toLocaleTimeString()}`}</p>
-        )}
+        {error && <p className="mt-4 text-center text-xs text-destructive">{error}</p>}
       </main>
 
+      {/* Stock Detail Modal */}
       {activeStock && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-xl rounded-lg border border-border bg-background">
-            <div className="flex items-center justify-between border-b border-border p-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm lg:items-center">
+          <div className="max-h-[85vh] w-full max-w-lg animate-slide-in-right overflow-auto rounded-t-2xl border border-border bg-card lg:rounded-2xl">
+            {/* Modal Header */}
+            <div className="sticky top-0 z-10 flex items-start justify-between border-b border-border bg-card p-4">
               <div>
                 <h3 className="text-base font-semibold">{activeStock.symbol}</h3>
                 <p className="text-xs text-muted-foreground">{activeStock.name}</p>
               </div>
-              <Button size="icon" variant="ghost" onClick={() => setActiveStock(null)}>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setActiveStock(null)}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <div className="grid grid-cols-3 gap-2 p-4 text-sm">
-              <div className="rounded-md border border-border p-2"><p className="text-xs text-muted-foreground">Price</p><p className="font-semibold">{formatPrice(activeStock.price)}</p></div>
-              <div className="rounded-md border border-border p-2"><p className="text-xs text-muted-foreground">Change</p><p className={activeStock.change >= 0 ? "text-chart-3 font-semibold" : "text-chart-5 font-semibold"}>{activeStock.changePercent.toFixed(2)}%</p></div>
-              <div className="rounded-md border border-border p-2"><p className="text-xs text-muted-foreground">Volume</p><p className="font-semibold">{formatCount(activeStock.volume)}</p></div>
-            </div>
-            <div className="border-t border-border p-4">
-              <p className="mb-2 text-xs text-muted-foreground">Order Book</p>
-              {modalLoading ? (
-                <p className="text-sm text-muted-foreground">Loading orders...</p>
-              ) : (
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-md border border-chart-3/30 p-2">
-                    <div className="mb-2 flex items-center justify-between text-xs">
-                      <span className="text-chart-3 font-medium">Buy Orders</span>
-                      <span className="text-muted-foreground">Best: {formatPrice(activeOrderBook?.bestBuyPrice || 0)}</span>
-                    </div>
-                    <div className="space-y-1 text-xs">
-                      {(activeOrderBook?.orders ?? [])
-                        .filter((order) => order.buyQuantity > 0)
-                        .slice(0, 5)
-                        .map((order, idx) => (
-                          <div key={`buy-${idx}-${order.buyPrice}`} className="flex justify-between border-t border-border pt-1">
-                            <span>{formatPrice(order.buyPrice)}</span>
-                            <span>Q {formatCount(order.buyQuantity)}</span>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                  <div className="rounded-md border border-chart-5/30 p-2">
-                    <div className="mb-2 flex items-center justify-between text-xs">
-                      <span className="text-chart-5 font-medium">Sell Orders</span>
-                      <span className="text-muted-foreground">Best: {formatPrice(activeOrderBook?.bestSellPrice || 0)}</span>
-                    </div>
-                    <div className="space-y-1 text-xs">
-                      {(activeOrderBook?.orders ?? [])
-                        .filter((order) => order.sellQuantity > 0)
-                        .slice(0, 5)
-                        .map((order, idx) => (
-                          <div key={`sell-${idx}-${order.sellPrice}`} className="flex justify-between border-t border-border pt-1">
-                            <span>{formatPrice(order.sellPrice)}</span>
-                            <span>Q {formatCount(order.sellQuantity)}</span>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
+
+            {/* Modal Content */}
+            <div className="p-4">
+              {/* Price Info */}
+              <div className="mb-4 grid grid-cols-3 gap-3">
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Price</p>
+                  <p className="text-sm font-semibold tabular-nums">{formatPrice(activeStock.price)}</p>
                 </div>
-              )}
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Change</p>
+                  <p className={`text-sm font-semibold tabular-nums ${activeStock.change >= 0 ? "text-chart-3" : "text-chart-5"}`}>
+                    {activeStock.change >= 0 ? "+" : ""}{activeStock.changePercent.toFixed(2)}%
+                  </p>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Volume</p>
+                  <p className="text-sm font-semibold tabular-nums">{formatCompact(activeStock.volume)}</p>
+                </div>
+              </div>
+
+              {/* Order Book */}
+              <div>
+                <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Order Book</h4>
+                {modalLoading ? (
+                  <p className="py-6 text-center text-xs text-muted-foreground">Loading orders...</p>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {/* Buy Orders */}
+                    <div className="rounded-lg border border-chart-3/20 bg-chart-3/5 p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-chart-3">Buy</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          Best: {formatPrice(activeOrderBook?.bestBuyPrice || 0)}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {(activeOrderBook?.orders ?? [])
+                          .filter((o) => o.buyQuantity > 0)
+                          .slice(0, 4)
+                          .map((order, idx) => (
+                            <div key={`buy-${idx}`} className="flex justify-between text-[11px]">
+                              <span className="tabular-nums">{formatPrice(order.buyPrice)}</span>
+                              <span className="tabular-nums text-muted-foreground">{formatCount(order.buyQuantity)}</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+
+                    {/* Sell Orders */}
+                    <div className="rounded-lg border border-chart-5/20 bg-chart-5/5 p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-chart-5">Sell</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          Best: {formatPrice(activeOrderBook?.bestSellPrice || 0)}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {(activeOrderBook?.orders ?? [])
+                          .filter((o) => o.sellQuantity > 0)
+                          .slice(0, 4)
+                          .map((order, idx) => (
+                            <div key={`sell-${idx}`} className="flex justify-between text-[11px]">
+                              <span className="tabular-nums">{formatPrice(order.sellPrice)}</span>
+                              <span className="tabular-nums text-muted-foreground">{formatCount(order.sellQuantity)}</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
