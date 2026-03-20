@@ -6,7 +6,7 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import {
   ArrowLeft,
   ArrowUpRight,
-  ChartCandlestick,
+  BarChart3,
   Moon,
   RefreshCw,
   Sun,
@@ -194,7 +194,7 @@ export default function GainersLosersPage() {
               </Button>
             </Link>
             <div className="rounded-xl bg-primary p-2 text-primary-foreground">
-              <ChartCandlestick className="h-5 w-5" />
+              <BarChart3 className="h-5 w-5" />
             </div>
             <div>
               <h1 className="font-heading text-xl font-semibold">Market Movers</h1>
