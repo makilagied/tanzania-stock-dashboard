@@ -691,7 +691,7 @@ export default function HomePage() {
             </a>
             <span>•</span>
             <a href="https://snippe.me/pay/makilagied" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
-              Support
+              Buy me a coffee
             </a>
           </div>
         </div>
