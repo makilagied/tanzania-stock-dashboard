@@ -105,6 +105,7 @@ export default function HomePage() {
   const [selectedOrderBook, setSelectedOrderBook] = useState<OrderBook | null>(null)
   const [selectedOrderBookLoading, setSelectedOrderBookLoading] = useState(false)
   const [openMarketCard, setOpenMarketCard] = useState<"movers" | "gainers" | "losers">("movers")
+  const [isStocksSidebarOpen, setIsStocksSidebarOpen] = useState(false)
   const [sortKey, setSortKey] = useState<"symbol" | "price" | "change" | "volume">("volume")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
 
@@ -277,6 +278,14 @@ export default function HomePage() {
 
           {/* Actions */}
           <div className="flex shrink-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[11px] lg:hidden"
+              onClick={() => setIsStocksSidebarOpen(true)}
+            >
+              Stocks
+            </Button>
             {lastUpdated && (
               <span className="hidden text-[10px] text-muted-foreground xl:block">
                 {lastUpdated.toLocaleTimeString()}
@@ -316,10 +325,10 @@ export default function HomePage() {
         <div className="grid gap-4 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px]">
 
           {/* LEFT COLUMN */}
-          <div className="flex h-[650px] flex-col gap-4">
+          <div className="flex flex-col gap-4 lg:h-[650px]">
 
             {/* Chart */}
-            <section className="flex min-h-0 flex-1 flex-col rounded-xl bg-card shadow-md">
+            <section className="flex h-[280px] min-h-0 flex-col rounded-xl bg-card shadow-md lg:h-auto lg:flex-1">
               <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   {selectedStock ? (
@@ -351,7 +360,7 @@ export default function HomePage() {
                   ))}
                 </div>
               </div>
-              <div className="min-h-0 flex-1 p-3">
+              <div className="h-[220px] p-3 lg:h-auto lg:min-h-0 lg:flex-1">
                 {historyLoading ? (
                   <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Loading chart...</div>
                 ) : history.length > 0 ? (
@@ -393,13 +402,13 @@ export default function HomePage() {
             </section>
 
             {/* Order book + collapsible market cards */}
-            <div className="grid h-[370px] gap-4 lg:grid-cols-[1fr_300px]">
-              <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-card shadow-md">
+            <div className="grid gap-4 lg:h-[370px] lg:grid-cols-[1fr_300px]">
+              <section className="flex min-h-0 flex-col rounded-xl bg-card shadow-md lg:h-full lg:overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-2.5">
                   <p className="text-xs font-semibold">Order Book</p>
                   <span className="text-[10px] text-muted-foreground">{selectedStock?.symbol ?? "—"}</span>
                 </div>
-                <div className="flex-1 min-h-0 space-y-3 overflow-auto p-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                <div className="space-y-3 p-3 lg:flex-1 lg:min-h-0 lg:overflow-auto lg:[scrollbar-width:none] lg:[-ms-overflow-style:none] lg:[&::-webkit-scrollbar]:hidden">
                   <div className="rounded-lg bg-muted/40 p-3 shadow-sm">
                     <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Summary</p>
                     <div className="grid gap-2 sm:grid-cols-2">
@@ -463,7 +472,7 @@ export default function HomePage() {
                 </div>
               </section>
 
-              <section className="h-full min-h-0 space-y-2 overflow-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              <section className="space-y-2 lg:h-full lg:min-h-0 lg:overflow-auto lg:[scrollbar-width:none] lg:[-ms-overflow-style:none] lg:[&::-webkit-scrollbar]:hidden">
                 <div className="rounded-xl bg-card shadow-md">
                   <button
                     type="button"
@@ -540,7 +549,7 @@ export default function HomePage() {
           </div>
 
           {/* RIGHT COLUMN — All Securities */}
-          <section className="flex h-[650px] flex-col rounded-xl bg-card shadow-md">
+          <section className="hidden flex-col rounded-xl bg-card shadow-md lg:flex lg:h-[650px]">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3">
               <div>
@@ -651,6 +660,60 @@ export default function HomePage() {
 
         {error && <p className="mt-4 text-center text-xs text-destructive">{error}</p>}
       </main>
+
+      {/* Mobile All Securities Sidebar */}
+      {isStocksSidebarOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 lg:hidden" onClick={() => setIsStocksSidebarOpen(false)}>
+          <aside
+            className="absolute inset-y-0 right-0 w-[88%] max-w-sm bg-card shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <p className="text-sm font-semibold">All Securities</p>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setIsStocksSidebarOpen(false)}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <div className="p-3">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-8 pl-7 text-[11px]"
+                />
+              </div>
+            </div>
+            <div className="h-[calc(100%-94px)] overflow-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              <div className="divide-y divide-border">
+                {visibleStocks.map((stock) => (
+                  <button
+                    key={`mobile-${stock.id}`}
+                    type="button"
+                    className={`w-full px-4 py-2.5 text-left hover:bg-muted/40 ${
+                      selectedSymbol === stock.symbol ? "bg-primary/5" : ""
+                    }`}
+                    onClick={() => {
+                      setSelectedSymbol(stock.symbol)
+                      setIsStocksSidebarOpen(false)
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium">{stock.symbol}</p>
+                      <span className={stock.change >= 0 ? "text-chart-3 text-[10px]" : "text-chart-5 text-[10px]"}>
+                        {stock.change >= 0 ? "+" : ""}
+                        {stock.change.toFixed(2)}
+                      </span>
+                    </div>
+                    <p className="truncate text-[10px] text-muted-foreground">{stock.name}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
 
       {/* ── Stock Detail Modal (bottom sheet on mobile, centered on desktop) ── */}
       {activeStock && (
