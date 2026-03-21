@@ -1,13 +1,17 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
+import { ANALYTICS_PERIOD_OPTIONS, type FundAnalyticsPeriod } from "@/lib/fund-analytics"
+import { addMovingAverages, computeStockPeriodAnalytics, historyToAscending } from "@/lib/stock-analytics"
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import {
   ArrowDownRight,
   ArrowUpRight,
   BarChart3,
+  LineChart,
+  List,
   Moon,
   RefreshCw,
   Search,
@@ -77,6 +81,9 @@ const formatCompact = (value: number) => {
 
 const formatCount = (value: number) => new Intl.NumberFormat("en-TZ").format(value)
 
+/** Max days the history API allows — analytics use this so metrics aren’t limited by chart range. */
+const STOCK_ANALYTICS_MAX_DAYS = 5000
+
 const HistoryTooltip = ({ active, payload }: ChartTooltipProps) => {
   if (!active || !payload || payload.length === 0) return null
   const point = payload[0].payload
@@ -88,16 +95,26 @@ const HistoryTooltip = ({ active, payload }: ChartTooltipProps) => {
   )
 }
 
+const formatPctAnalytics = (value: number | null, digits = 2) => {
+  if (value == null || Number.isNaN(value)) return "—"
+  const sign = value > 0 ? "+" : ""
+  return `${sign}${value.toFixed(digits)}%`
+}
+
 export default function HomePage() {
   const [stocks, setStocks] = useState<StockData[]>([])
   const [history, setHistory] = useState<HistoryPoint[]>([])
+  /** Full history for analytics (independent of chart `days`). */
+  const [analyticsHistory, setAnalyticsHistory] = useState<HistoryPoint[]>([])
   const [topMovers, setTopMovers] = useState<LiveMoverPoint[]>([])
   const [indices, setIndices] = useState<ShareIndexPoint[]>([])
   const [search, setSearch] = useState("")
   const [selectedSymbol, setSelectedSymbol] = useState("CRDB")
   const [days, setDays] = useState(90)
+  const [stockPeriod, setStockPeriod] = useState<FundAnalyticsPeriod>("1m")
   const [loading, setLoading] = useState(true)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [analyticsHistoryLoading, setAnalyticsHistoryLoading] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -110,6 +127,7 @@ export default function HomePage() {
   const [isStocksSidebarOpen, setIsStocksSidebarOpen] = useState(false)
   const [sortKey, setSortKey] = useState<"symbol" | "price" | "change" | "volume">("volume")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
+  const stockAnalyticsSectionRef = useRef<HTMLElement | null>(null)
 
   const selectedStock = stocks.find((s) => s.symbol === selectedSymbol) ?? null
   const totalVolume = stocks.reduce((sum, s) => sum + s.volume, 0)
@@ -138,6 +156,41 @@ export default function HomePage() {
 
   const sortIcon = (key: typeof sortKey) =>
     sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : ""
+
+  /** Pick a stock from the full “All securities” list and bring analytics into view. */
+  const selectStockFromAllSecuritiesList = (symbol: string) => {
+    const fromMobileDrawer = isStocksSidebarOpen
+    setSelectedSymbol(symbol)
+    setIsStocksSidebarOpen(false)
+    const scrollToAnalytics = () =>
+      stockAnalyticsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    if (fromMobileDrawer) {
+      window.setTimeout(scrollToAnalytics, 220)
+    } else {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(scrollToAnalytics)
+      })
+    }
+  }
+
+  /** Prefer long history for metrics; if the API returns nothing (e.g. huge `days`), use chart `history`. */
+  const historyForStockAnalytics = useMemo(() => {
+    if (analyticsHistory.length > 0) return analyticsHistory
+    return history
+  }, [analyticsHistory, history])
+
+  const analyticsHistoryAscending = useMemo(
+    () => historyToAscending(historyForStockAnalytics),
+    [historyForStockAnalytics],
+  )
+  const analyticsHistoryEnriched = useMemo(
+    () => addMovingAverages(analyticsHistoryAscending),
+    [analyticsHistoryAscending],
+  )
+  const stockAnalytics = useMemo(
+    () => computeStockPeriodAnalytics(analyticsHistoryEnriched, stockPeriod),
+    [analyticsHistoryEnriched, stockPeriod],
+  )
 
   const toggleDarkMode = () => {
     setIsDarkMode((prev) => !prev)
@@ -253,8 +306,30 @@ export default function HomePage() {
   }, [])
 
   useEffect(() => {
-    if (selectedSymbol) fetchHistory(selectedSymbol, days)
+    if (selectedSymbol) void fetchHistory(selectedSymbol, days)
   }, [selectedSymbol, days])
+
+  useEffect(() => {
+    if (!selectedSymbol) return
+    let cancelled = false
+    setAnalyticsHistoryLoading(true)
+    ;(async () => {
+      try {
+        const res = await fetch(
+          `/api/market/history/${encodeURIComponent(selectedSymbol)}?days=${STOCK_ANALYTICS_MAX_DAYS}`,
+        )
+        const payload = await res.json()
+        if (!cancelled) setAnalyticsHistory(Array.isArray(payload?.data) ? payload.data : [])
+      } catch {
+        if (!cancelled) setAnalyticsHistory([])
+      } finally {
+        if (!cancelled) setAnalyticsHistoryLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedSymbol])
 
   useEffect(() => {
     if (selectedStock?.id) fetchSelectedOrderBook(selectedStock.id)
@@ -267,14 +342,6 @@ export default function HomePage() {
         title="DSE Market"
         subtitle="Dar es Salaam Stock Exchange"
       >
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-[11px] lg:hidden"
-          onClick={() => setIsStocksSidebarOpen(true)}
-        >
-          Stocks
-        </Button>
         {lastUpdated && (
           <span className="hidden text-[10px] text-muted-foreground xl:block">{lastUpdated.toLocaleTimeString()}</span>
         )}
@@ -314,25 +381,40 @@ export default function HomePage() {
 
             {/* Chart */}
             <section className="flex h-[280px] min-h-0 flex-col rounded-xl bg-card shadow-md lg:h-auto lg:flex-1">
-              <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  {selectedStock ? (
-                    <p className="text-sm font-semibold">
-                      {selectedStock.symbol} {formatPrice(selectedStock.price)}{" "}
-                      <span className={selectedStock.change >= 0 ? "text-chart-3" : "text-chart-5"}>
-                        ({selectedStock.change >= 0 ? "+" : ""}
-                        {selectedStock.changePercent.toFixed(2)}%)
-                      </span>
-                    </p>
-                  ) : (
-                    <p className="text-sm font-semibold">—</p>
-                  )}
-                  <p className="text-[10px] text-muted-foreground">{selectedStock?.name ?? "Select a stock below"}</p>
+              {/* Two rows on &lt;lg so the list icon stays flush right; one row on lg+ (icon hidden) */}
+              <div className="flex flex-col gap-2 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex w-full min-w-0 items-start justify-between gap-3 lg:min-w-0 lg:flex-1 lg:items-center">
+                  <div className="min-w-0 flex-1">
+                    {selectedStock ? (
+                      <p className="text-sm font-semibold">
+                        {selectedStock.symbol} {formatPrice(selectedStock.price)}{" "}
+                        <span className={selectedStock.change >= 0 ? "text-chart-3" : "text-chart-5"}>
+                          ({selectedStock.change >= 0 ? "+" : ""}
+                          {selectedStock.changePercent.toFixed(2)}%)
+                        </span>
+                      </p>
+                    ) : (
+                      <p className="text-sm font-semibold">—</p>
+                    )}
+                    <p className="text-[10px] text-muted-foreground">{selectedStock?.name ?? "Select a stock below"}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 rounded-lg border-border/80 bg-muted/30 lg:hidden"
+                    onClick={() => setIsStocksSidebarOpen(true)}
+                    aria-label="Browse all securities"
+                    title="All securities"
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex flex-wrap gap-1 sm:justify-end lg:justify-end lg:shrink-0">
                   {[30, 90, 180, 365].map((d) => (
                     <button
                       key={d}
+                      type="button"
                       onClick={() => setDays(d)}
                       className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors ${
                         days === d
@@ -529,6 +611,19 @@ export default function HomePage() {
                     </div>
                   )}
                 </div>
+
+                <div className="rounded-xl bg-muted/30 p-3 text-[10px] leading-relaxed text-muted-foreground shadow-sm">
+                  Data is attributed to{" "}
+                  <a
+                    href="https://dse.co.tz/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-foreground underline-offset-2 hover:underline"
+                  >
+                    Dar es Salaam Stock Exchange (DSE)
+                  </a>
+                  . Values are indicative; confirm with the exchange or your broker before trading.
+                </div>
               </section>
             </div>
           </div>
@@ -602,7 +697,7 @@ export default function HomePage() {
                     visibleStocks.map((stock) => (
                       <tr
                         key={stock.id}
-                        onClick={() => { setSelectedSymbol(stock.symbol) }}
+                        onClick={() => selectStockFromAllSecuritiesList(stock.symbol)}
                         className={`cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-muted/40 ${
                           selectedSymbol === stock.symbol ? "bg-primary/5" : ""
                         }`}
@@ -612,7 +707,7 @@ export default function HomePage() {
                           <p className="truncate text-[10px] text-muted-foreground max-w-[100px]">{stock.name}</p>
                         </td>
                         <td className="px-3 py-2 text-right font-medium tabular-nums">
-                          {formatCompact(stock.price)}
+                          {formatPrice(stock.price)}
                         </td>
                         <td className="px-3 py-2 text-right">
                           <span
@@ -642,6 +737,160 @@ export default function HomePage() {
             </div>
           </section>
         </div>
+
+        <section
+          ref={stockAnalyticsSectionRef}
+          id="stock-analytics"
+          className="mt-6 scroll-mt-24 rounded-xl bg-card p-4 shadow-md"
+          aria-label={`Analytics for ${selectedSymbol}`}
+        >
+          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-2">
+              <LineChart className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+              <div>
+                <h2 className="text-sm font-semibold">Price &amp; liquidity context — {selectedSymbol}</h2>
+                <p className="text-[11px] text-muted-foreground">
+                  Uses full DSE history when available (up to {STOCK_ANALYTICS_MAX_DAYS} days), otherwise the same series as
+                  the chart. Planning only — not investment advice.
+                </p>
+                {analyticsHistory.length === 0 && history.length > 0 && !analyticsHistoryLoading ? (
+                  <p className="mt-1 text-[10px] text-amber-700 dark:text-amber-500/90">
+                    Full-history request returned no rows for this symbol — metrics use the chart window until data is
+                    available.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {ANALYTICS_PERIOD_OPTIONS.map(({ id, short }) => (
+                <Button
+                  key={id}
+                  type="button"
+                  variant={stockPeriod === id ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 min-w-[2.5rem] px-2 text-[10px]"
+                  onClick={() => setStockPeriod(id)}
+                >
+                  {short}
+                </Button>
+              ))}
+            </div>
+          </div>
+          {analyticsHistoryLoading ? (
+            <p className="text-sm text-muted-foreground">Loading analytics…</p>
+          ) : !stockAnalytics ? (
+            <p className="text-sm text-muted-foreground">
+              {selectedSymbol
+                ? `No usable daily prices for ${selectedSymbol} (check date/price fields from the feed or try refresh).`
+                : "Select a security to see analytics."}
+            </p>
+          ) : stockAnalytics.observations < 2 ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Not enough daily prices in this window for return metrics ({stockAnalytics.observations} session
+                {stockAnalytics.observations === 1 ? "" : "s"}). Widen the analytics period (e.g. 3M or YTD) or check DSE
+                data for this symbol.
+              </p>
+              {stockAnalytics.maTrendNote ? (
+                <div className="rounded-lg bg-muted/40 p-3 text-[11px] text-muted-foreground shadow-sm">
+                  <span className="font-medium text-foreground">Moving averages: </span>
+                  {stockAnalytics.maTrendNote}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <p className="mb-3 text-[11px] text-muted-foreground">
+                <span className="font-medium text-foreground">{stockAnalytics.rangeLabel}</span>
+                {stockAnalytics.startDate && stockAnalytics.endDate && (
+                  <>
+                    {" "}
+                    · {stockAnalytics.startDate} → {stockAnalytics.endDate} · {stockAnalytics.observations} sessions
+                  </>
+                )}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Total return</p>
+                  <p
+                    className={`mt-1 text-lg font-semibold tabular-nums ${
+                      (stockAnalytics.totalReturnPct ?? 0) >= 0 ? "text-chart-3" : "text-chart-5"
+                    }`}
+                  >
+                    {formatPctAnalytics(stockAnalytics.totalReturnPct)}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Annualized return <span className="normal-case opacity-80">(approx.)</span>
+                  </p>
+                  <p
+                    className={`mt-1 text-lg font-semibold tabular-nums ${
+                      (stockAnalytics.annualizedReturnPct ?? 0) >= 0 ? "text-chart-3" : "text-chart-5"
+                    }`}
+                  >
+                    {formatPctAnalytics(stockAnalytics.annualizedReturnPct)}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Volatility <span className="normal-case opacity-80">(ann.)</span>
+                  </p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
+                    {formatPctAnalytics(stockAnalytics.volatilityAnnualizedPct)}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">From daily % changes</p>
+                </div>
+                <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Max drawdown</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-chart-5">
+                    {stockAnalytics.maxDrawdownPct != null ? `${stockAnalytics.maxDrawdownPct.toFixed(2)}%` : "—"}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">Largest fall from a peak in window</p>
+                </div>
+                <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Best / worst day</p>
+                  <p className="mt-1 text-sm font-semibold tabular-nums">
+                    <span className="text-chart-3">{formatPctAnalytics(stockAnalytics.bestDayPct)}</span>
+                    <span className="text-muted-foreground"> / </span>
+                    <span className="text-chart-5">{formatPctAnalytics(stockAnalytics.worstDayPct)}</span>
+                  </p>
+                </div>
+                <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Period high / low</p>
+                  <p className="mt-1 text-sm font-semibold tabular-nums text-foreground">
+                    {stockAnalytics.periodHighClose != null ? formatPrice(stockAnalytics.periodHighClose) : "—"}{" "}
+                    <span className="text-muted-foreground">/</span>{" "}
+                    {stockAnalytics.periodLowClose != null ? formatPrice(stockAnalytics.periodLowClose) : "—"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Volume vs period avg</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
+                    {formatPctAnalytics(stockAnalytics.volumeVsAvgPct)}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    Last {stockAnalytics.latestVolume != null ? formatCompact(stockAnalytics.latestVolume) : "—"} vs avg{" "}
+                    {stockAnalytics.avgVolume != null ? formatCompact(stockAnalytics.avgVolume) : "—"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Sessions in window</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
+                    {stockAnalytics.observations}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">Trading days in this analytics slice</p>
+                </div>
+              </div>
+              {stockAnalytics.maTrendNote ? (
+                <div className="mt-3 rounded-lg bg-muted/40 p-3 text-[11px] text-muted-foreground shadow-sm">
+                  <span className="font-medium text-foreground">Moving averages (full history): </span>
+                  {stockAnalytics.maTrendNote}
+                </div>
+              ) : null}
+            </>
+          )}
+        </section>
 
         {error && <p className="mt-4 text-center text-xs text-destructive">{error}</p>}
       </main>
@@ -679,19 +928,21 @@ export default function HomePage() {
                     className={`w-full px-4 py-2.5 text-left hover:bg-muted/40 ${
                       selectedSymbol === stock.symbol ? "bg-primary/5" : ""
                     }`}
-                    onClick={() => {
-                      setSelectedSymbol(stock.symbol)
-                      setIsStocksSidebarOpen(false)
-                    }}
+                    onClick={() => selectStockFromAllSecuritiesList(stock.symbol)}
                   >
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-medium">{stock.symbol}</p>
-                      <span className={stock.change >= 0 ? "text-chart-3 text-[10px]" : "text-chart-5 text-[10px]"}>
-                        {stock.change >= 0 ? "+" : ""}
-                        {stock.change.toFixed(2)}
-                      </span>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium">{stock.symbol}</p>
+                        <p className="truncate text-[10px] text-muted-foreground">{stock.name}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-xs font-semibold tabular-nums">{formatPrice(stock.price)}</p>
+                        <span className={stock.change >= 0 ? "text-chart-3 text-[10px]" : "text-chart-5 text-[10px]"}>
+                          {stock.change >= 0 ? "+" : ""}
+                          {stock.change.toFixed(2)}
+                        </span>
+                      </div>
                     </div>
-                    <p className="truncate text-[10px] text-muted-foreground">{stock.name}</p>
                   </button>
                 ))}
               </div>

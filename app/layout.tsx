@@ -17,7 +17,7 @@ const sourceSansPro = Source_Sans_Pro({
 })
 
 export const metadata: Metadata = {
-  title: "Tanzania Investor's Dashboard",
+  title: "Investor's Dashboard",
   description: "Real-time stock market data from Dar es Salaam Stock Exchange",
     generator: 'makilagied'
 }

@@ -54,7 +54,7 @@ const FundTooltip = ({
   if (!active || !payload?.length) return null
   const row = payload[0].payload
   return (
-    <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-lg">
+    <div className="rounded-lg bg-card px-3 py-2 text-xs shadow-lg ring-1 ring-black/5 dark:ring-white/10">
       <p className="font-medium">{row.date}</p>
       <p className="text-muted-foreground">NAV / unit: {formatMoney(row.navPerUnit, currency)}</p>
       <p className="text-muted-foreground">Sale: {formatMoney(row.salePricePerUnit, currency)}</p>
@@ -178,6 +178,15 @@ export default function FundsPage() {
   const isVertex = meta?.provider === "vertex"
   const isZan = meta?.provider === "zan"
 
+  const dataOwner = useMemo(() => {
+    if (isUtt) return { name: "UTT AMIS", href: "https://uttamis.co.tz/" }
+    if (isFaida) return { name: "Watumishi Housing", href: "https://www.whi.go.tz/" }
+    if (isInuka) return { name: "Orbit Securities", href: "https://www.orbit.co.tz/" }
+    if (isVertex) return { name: "Vertex", href: "https://vertex.co.tz/" }
+    if (isZan) return { name: "ZAN Securities", href: "https://zansec.co.tz/" }
+    return { name: "iTrust Finance", href: "https://itrust.co.tz/" }
+  }, [isUtt, isFaida, isInuka, isVertex, isZan])
+
   return (
     <div className="min-h-screen bg-background font-sans">
       <SiteHeader
@@ -194,8 +203,8 @@ export default function FundsPage() {
       </SiteHeader>
 
       <main className="mx-auto max-w-[1600px] px-4 py-4 lg:px-6 lg:py-5">
-        <div className="mb-4 rounded-xl border border-border bg-card px-3 py-2.5 shadow-sm sm:px-4 sm:py-3">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+        <div className="mb-4 rounded-xl bg-card px-3 py-2.5 shadow-md sm:px-4 sm:py-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
             {/* iTrust mutual — inline: toggle + pills on same flow */}
             <div className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
               <button
@@ -233,8 +242,6 @@ export default function FundsPage() {
                 ))}
             </div>
 
-            <span className="hidden h-4 w-px shrink-0 bg-border sm:block" aria-hidden />
-
             <div className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
               <button
                 type="button"
@@ -270,8 +277,6 @@ export default function FundsPage() {
                   </button>
                 ))}
             </div>
-
-            <span className="hidden h-4 w-px shrink-0 bg-border sm:block" aria-hidden />
 
             <div className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
               <button
@@ -309,8 +314,6 @@ export default function FundsPage() {
                 ))}
             </div>
 
-            <span className="hidden h-4 w-px shrink-0 bg-border sm:block" aria-hidden />
-
             <div className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
               <button
                 type="button"
@@ -346,8 +349,6 @@ export default function FundsPage() {
                   </button>
                 ))}
             </div>
-
-            <span className="hidden h-4 w-px shrink-0 bg-border sm:block" aria-hidden />
 
             <div className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
               <button
@@ -385,8 +386,6 @@ export default function FundsPage() {
                 ))}
             </div>
 
-            <span className="hidden h-4 w-px shrink-0 bg-border sm:block" aria-hidden />
-
             <div className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
               <button
                 type="button"
@@ -422,8 +421,6 @@ export default function FundsPage() {
                   </button>
                 ))}
             </div>
-
-            <span className="hidden h-4 w-px shrink-0 bg-border sm:block" aria-hidden />
 
             <div className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
               <button
@@ -464,23 +461,23 @@ export default function FundsPage() {
         </div>
 
         {error && (
-          <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div className="mb-4 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive shadow-md ring-1 ring-destructive/20">
             {error}
           </div>
         )}
 
         <div className="grid gap-4 lg:grid-cols-3">
-          <section className="rounded-xl border border-border bg-card p-4 shadow-sm lg:col-span-2">
+          <section className="rounded-xl bg-card p-4 shadow-md lg:col-span-2">
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2 className="text-lg font-semibold">{meta?.label ?? latest?.fundName ?? selectedId}</h2>
                 <p className="text-[11px] text-muted-foreground">
                   {meta?.category === "etf" ? "Exchange-traded fund" : "Mutual fund"} · NAV per unit
                   {isUtt ? <span className="ml-1">(UTT AMIS)</span> : null}
-                  {isFaida ? <span className="ml-1">(Watumishi Housing · CSV)</span> : null}
-                  {isInuka ? <span className="ml-1">(Orbit · CSV)</span> : null}
-                  {isVertex ? <span className="ml-1">(Vertex · CSV)</span> : null}
-                  {isZan ? <span className="ml-1">(ZAN · CSV)</span> : null}
+                  {isFaida ? <span className="ml-1">(Watumishi Housing)</span> : null}
+                  {isInuka ? <span className="ml-1">(Orbit)</span> : null}
+                  {isVertex ? <span className="ml-1">(Vertex)</span> : null}
+                  {isZan ? <span className="ml-1">(ZAN Securities)</span> : null}
                 </p>
                 {latest && (
                   <p className="mt-2 text-sm font-medium tabular-nums">
@@ -552,94 +549,55 @@ export default function FundsPage() {
           </section>
 
           <aside className="flex flex-col gap-3">
-            <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <div className="rounded-xl bg-card p-4 shadow-md">
               <h3 className="text-xs font-semibold text-muted-foreground">Latest snapshot</h3>
               {latest ? (
-                <dl className="mt-3 space-y-2 text-xs">
-                  <div className="flex justify-between gap-2 border-b border-border pb-2">
+                <dl className="mt-3 divide-y divide-border/70 text-xs">
+                  <div className="flex justify-between gap-3 py-2.5 first:pt-0">
                     <dt className="text-muted-foreground">As of</dt>
-                    <dd className="font-medium tabular-nums">{latest.date}</dd>
+                    <dd className="text-right font-medium tabular-nums">{latest.date}</dd>
                   </div>
-                  <div className="flex justify-between gap-2 border-b border-border pb-2">
+                  <div className="flex justify-between gap-3 py-2.5">
                     <dt className="text-muted-foreground">Sale price / unit</dt>
-                    <dd className="font-medium tabular-nums">{formatMoney(latest.salePricePerUnit, currency)}</dd>
+                    <dd className="text-right font-medium tabular-nums">{formatMoney(latest.salePricePerUnit, currency)}</dd>
                   </div>
-                  <div className="flex justify-between gap-2 border-b border-border pb-2">
+                  <div className="flex justify-between gap-3 py-2.5">
                     <dt className="text-muted-foreground">Repurchase / unit</dt>
-                    <dd className="font-medium tabular-nums">{formatMoney(latest.repurchasePricePerUnit, currency)}</dd>
+                    <dd className="text-right font-medium tabular-nums">{formatMoney(latest.repurchasePricePerUnit, currency)}</dd>
                   </div>
-                  <div className="flex justify-between gap-2 border-b border-border pb-2">
+                  <div className="flex justify-between gap-3 py-2.5">
                     <dt className="text-muted-foreground">Total NAV</dt>
-                    <dd className="font-medium tabular-nums">{formatCompact(latest.netAssetValue)}</dd>
+                    <dd className="text-right font-medium tabular-nums">{formatCompact(latest.netAssetValue)}</dd>
                   </div>
-                  <div className="flex justify-between gap-2">
+                  <div className="flex justify-between gap-3 py-2.5">
                     <dt className="text-muted-foreground">Outstanding units</dt>
-                    <dd className="font-medium tabular-nums">{formatCompact(latest.outStandingUnits)}</dd>
+                    <dd className="text-right font-medium tabular-nums">{formatCompact(latest.outStandingUnits)}</dd>
                   </div>
                 </dl>
               ) : (
                 <p className="mt-2 text-xs text-muted-foreground">—</p>
               )}
             </div>
-            <div className="rounded-xl border border-dashed border-border bg-muted/20 p-3 text-[10px] leading-relaxed text-muted-foreground">
-              Data source:{" "}
-              {isUtt ? (
-                <>
-                  <a
-                    href="https://uttamis.co.tz/"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary underline-offset-2 hover:underline"
-                  >
-                    UTT AMIS
-                  </a>{" "}
-                  (official NAV table). Values are indicative; confirm with UTT AMIS or your adviser before investing.
-                </>
-              ) : isFaida ? (
-                <>
-                  <span className="font-medium text-foreground">Faida Fund CSV</span> — read from{" "}
-                  <code className="whitespace-pre rounded bg-muted px-1 py-0.5 text-[9px] text-foreground">
-                    public/faida-fund/FAID FUND  NAV PERFORMANCE.csv
-                  </code>{" "}
-                  at deploy time. Replace that file to update NAVs. Confirm figures with Watumishi Housing before
-                  investing.
-                </>
-              ) : isInuka ? (
-                <>
-                  <span className="font-medium text-foreground">Inuka (Orbit) CSV</span> — bundled under{" "}
-                  <code className="rounded bg-muted px-1 py-0.5 text-[9px] text-foreground">public/inuka-fund/</code>.
-                  Replace the fund file to refresh NAVs. Confirm with Orbit / fund documentation before investing.
-                </>
-              ) : isVertex ? (
-                <>
-                  <span className="font-medium text-foreground">Vertex CSV</span> — bundled under{" "}
-                  <code className="rounded bg-muted px-1 py-0.5 text-[9px] text-foreground">public/vertex-fund/</code>.
-                  Replace CSV files to refresh NAVs. Confirm figures with Vertex documentation before investing.
-                </>
-              ) : isZan ? (
-                <>
-                  <span className="font-medium text-foreground">ZAN Securities CSV</span> — bundled under{" "}
-                  <code className="rounded bg-muted px-1 py-0.5 text-[9px] text-foreground">public/zan-security/</code>.
-                  Replace CSV files to refresh NAVs. Confirm figures with ZAN Securities documentation before investing.
-                </>
+            <div className="rounded-xl bg-muted/30 p-3 text-[10px] leading-relaxed text-muted-foreground shadow-sm">
+              Data is attributed to{" "}
+              {dataOwner.href ? (
+                <a
+                  href={dataOwner.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-foreground underline-offset-2 hover:underline"
+                >
+                  {dataOwner.name}
+                </a>
               ) : (
-                <>
-                  <a
-                    href="https://api.itrust.co.tz/"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary underline-offset-2 hover:underline"
-                  >
-                    iTrust Finance
-                  </a>{" "}
-                  public fund endpoints. Values are indicative; confirm with your fund manager before investing.
-                </>
+                <span className="font-medium text-foreground">{dataOwner.name}</span>
               )}
+              . Values are indicative; confirm with the fund provider or your adviser before investing.
             </div>
           </aside>
         </div>
 
-        <section className="mt-4 rounded-xl border border-border bg-card p-4 shadow-sm">
+        <section className="mt-4 rounded-xl bg-card p-4 shadow-md">
           <div className="mb-4 flex items-start gap-2">
             <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
             <div>
@@ -674,7 +632,7 @@ export default function FundsPage() {
                 )}
               </p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Total return</p>
                   <p
                     className={`mt-1 text-lg font-semibold tabular-nums ${
@@ -684,7 +642,7 @@ export default function FundsPage() {
                     {formatPct(periodAnalytics.totalReturnPct)}
                   </p>
                 </div>
-                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     Annualized return <span className="normal-case opacity-80">(approx.)</span>
                   </p>
@@ -696,7 +654,7 @@ export default function FundsPage() {
                     {formatPct(periodAnalytics.annualizedReturnPct)}
                   </p>
                 </div>
-                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     Volatility <span className="normal-case opacity-80">(ann.)</span>
                   </p>
@@ -705,7 +663,7 @@ export default function FundsPage() {
                   </p>
                   <p className="mt-0.5 text-[10px] text-muted-foreground">From daily NAV changes</p>
                 </div>
-                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Max drawdown</p>
                   <p className="mt-1 text-lg font-semibold tabular-nums text-chart-5">
                     {periodAnalytics.maxDrawdownPct != null
@@ -714,7 +672,7 @@ export default function FundsPage() {
                   </p>
                   <p className="mt-0.5 text-[10px] text-muted-foreground">Largest fall from a peak in window</p>
                 </div>
-                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Best / worst day</p>
                   <p className="mt-1 text-sm font-semibold tabular-nums">
                     <span className="text-chart-3">{formatPct(periodAnalytics.bestDayPct)}</span>
@@ -722,7 +680,7 @@ export default function FundsPage() {
                     <span className="text-chart-5">{formatPct(periodAnalytics.worstDayPct)}</span>
                   </p>
                 </div>
-                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Period high / low NAV</p>
                   <p className="mt-1 text-sm font-semibold tabular-nums text-foreground">
                     {periodAnalytics.periodHighNav != null ? formatMoney(periodAnalytics.periodHighNav, currency) : "—"}{" "}
@@ -730,7 +688,7 @@ export default function FundsPage() {
                     {periodAnalytics.periodLowNav != null ? formatMoney(periodAnalytics.periodLowNav, currency) : "—"}
                   </p>
                 </div>
-                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     Sale vs repurchase spread
                   </p>
