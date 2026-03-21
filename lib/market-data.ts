@@ -120,11 +120,24 @@ const normalizeHistoryPayload = (data: any): HistoricalPoint[] => {
           : []
   return arrayPayload
     .map((item: any) => ({
-      date: String(item.date || item.trade_date || item.timestamp || item.day || item.createdAt || "").slice(0, 10),
-      close: toNumber(item.close ?? item.closing_price ?? item.close_price ?? item.marketPrice ?? item.price),
-      volume: toNumber(item.volume),
+      date: String(
+        item.date ??
+          item.trade_date ??
+          item.tradeDate ??
+          item.timestamp ??
+          item.day ??
+          item.createdAt ??
+          item.price_date ??
+          "",
+      )
+        .trim()
+        .slice(0, 10),
+      close: toNumber(
+        item.close ?? item.closing_price ?? item.close_price ?? item.closingPrice ?? item.marketPrice ?? item.price,
+      ),
+      volume: toNumber(item.volume ?? item.total_volume ?? item.totalVolume),
     }))
-    .filter((point) => point.date && point.close > 0)
+    .filter((point) => point.date.length > 0 && point.close > 0)
 }
 
 const generateFallbackHistory = (symbol: string, days: number, basePrice: number): HistoricalPoint[] => {
@@ -214,11 +227,15 @@ export const getHistoricalDataWithMeta = async (
         description: item.description,
       }))
 
-      return {
-        success: Boolean(payload?.success ?? true),
-        data: normalizedData,
-        current,
-        message: payload?.message || "Data available..",
+      // Only return when we actually parsed rows. Otherwise fall through so getHistoricalData
+      // can retry / use alternate sources (large `days` sometimes returns OK with empty/unmapped shape).
+      if (normalizedData.length > 0) {
+        return {
+          success: Boolean(payload?.success ?? true),
+          data: normalizedData,
+          current,
+          message: payload?.message || "Data available..",
+        }
       }
     }
   } catch {

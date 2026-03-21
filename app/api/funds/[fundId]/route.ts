@@ -1,12 +1,19 @@
 import { NextResponse } from "next/server"
-import { getFundById, getFundMeta } from "@/lib/itrust-funds"
+import { getFundMeta } from "@/lib/funds-catalog"
+import { loadFundRecords } from "@/lib/load-fund-records"
 
 export async function GET(_request: Request, context: { params: Promise<{ fundId: string }> }) {
   try {
     const { fundId } = await context.params
     const id = decodeURIComponent(fundId)
     const meta = getFundMeta(id)
-    const data = await getFundById(id)
+    if (!meta) {
+      return NextResponse.json(
+        { success: false, fundId: id, meta: null, data: [], error: "Unknown fund." },
+        { status: 200 },
+      )
+    }
+    const data = await loadFundRecords(meta)
     return NextResponse.json({
       success: true,
       fundId: id,

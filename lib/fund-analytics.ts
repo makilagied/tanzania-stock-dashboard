@@ -1,7 +1,7 @@
 import type { ITrustFundRecord } from "@/lib/itrust-funds"
 
-/** Period presets for fund performance analytics */
-export type FundAnalyticsPeriod = "1w" | "1m" | "qtd" | "mtd" | "ytd"
+/** Period presets: chart + analytics use the same selection (includes full history). */
+export type FundAnalyticsPeriod = "1w" | "1m" | "qtd" | "mtd" | "ytd" | "all"
 
 export type FundPeriodAnalytics = {
   period: FundAnalyticsPeriod
@@ -51,6 +51,8 @@ function startOfYear(ts: number) {
  */
 export function getAnalyticsWindowStart(period: FundAnalyticsPeriod, latestTs: number): number {
   switch (period) {
+    case "all":
+      return 0
     case "1w":
       return latestTs - 7 * MS_DAY
     case "1m":
@@ -64,21 +66,38 @@ export function getAnalyticsWindowStart(period: FundAnalyticsPeriod, latestTs: n
   }
 }
 
+/**
+ * Same date window as analytics — use for the NAV chart series.
+ * `rows` must be sorted ascending by `dateSort`.
+ */
+export function filterFundRowsByPeriod(
+  rowsAscending: ITrustFundRecord[],
+  period: FundAnalyticsPeriod,
+): ITrustFundRecord[] {
+  if (rowsAscending.length === 0) return []
+  if (period === "all") return rowsAscending
+  const latestTs = rowsAscending[rowsAscending.length - 1].dateSort
+  const windowStart = getAnalyticsWindowStart(period, latestTs)
+  return rowsAscending.filter((r) => r.dateSort >= windowStart)
+}
+
 export const ANALYTICS_PERIOD_LABELS: Record<FundAnalyticsPeriod, string> = {
   "1w": "1 week",
   "1m": "1 month",
   qtd: "Quarter (calendar)",
   mtd: "Month to date",
   ytd: "Year to date",
+  all: "Full history",
 }
 
-/** Buttons for the analytics period selector (short labels) */
+/** Single control: chart + analytics (short labels) */
 export const ANALYTICS_PERIOD_OPTIONS: { id: FundAnalyticsPeriod; short: string }[] = [
   { id: "1w", short: "1W" },
   { id: "1m", short: "1M" },
   { id: "qtd", short: "Quarter" },
   { id: "mtd", short: "MTD" },
   { id: "ytd", short: "YTD" },
+  { id: "all", short: "All" },
 ]
 
 function mean(xs: number[]) {
