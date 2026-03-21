@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getShareIndices } from "@/lib/market-data"
+import {
+  CACHE_CONTROL_STALE_SNAPSHOT,
+  cacheControlPublicSeconds,
+  staleMetaHeaders,
+} from "@/lib/http-cache-headers"
+import { getCachedShareIndices } from "@/lib/market-data-cached"
 
 const defaultFromDate = () => {
   const date = new Date()
@@ -13,9 +18,30 @@ const defaultFromDate = () => {
 export async function GET(request: NextRequest) {
   try {
     const from = request.nextUrl.searchParams.get("from") || defaultFromDate()
-    const payload = await getShareIndices(from)
-    return NextResponse.json({ success: payload.success, from, data: payload.data })
+    const { data: payload, stale, cachedAtMs } = await getCachedShareIndices(from)
+    return NextResponse.json(
+      {
+        success: payload.success,
+        from,
+        data: payload.data,
+        ...(stale
+          ? {
+              stale: true,
+              ...(cachedAtMs != null ? { cachedAt: new Date(cachedAtMs).toISOString() } : {}),
+            }
+          : {}),
+      },
+      {
+        headers: {
+          "Cache-Control": stale ? CACHE_CONTROL_STALE_SNAPSHOT : cacheControlPublicSeconds(300),
+          ...(stale ? staleMetaHeaders(cachedAtMs) : {}),
+        },
+      },
+    )
   } catch {
-    return NextResponse.json({ success: false, data: [], error: "Unable to fetch indices right now." }, { status: 200 })
+    return NextResponse.json(
+      { success: false, data: [], error: "Unable to fetch indices right now." },
+      { status: 200, headers: { "Cache-Control": "no-store" } },
+    )
   }
 }

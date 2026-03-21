@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server"
-import { loadFaidaFundRecords } from "@/lib/faida-fund-csv"
+import {
+  CACHE_CONTROL_STALE_SNAPSHOT,
+  cacheControlPublicSeconds,
+  staleMetaHeaders,
+} from "@/lib/http-cache-headers"
+import { getCachedFaidaNavRecords } from "@/lib/funds-data-cached"
 import { FAIDA_FUND } from "@/lib/faida-fund-meta"
 import { FAIDA_CSV_PUBLIC_PATH } from "@/lib/load-fund-records"
 
@@ -10,15 +15,29 @@ import { FAIDA_CSV_PUBLIC_PATH } from "@/lib/load-fund-records"
  */
 export async function GET() {
   try {
-    const data = await loadFaidaFundRecords()
-    return NextResponse.json({
-      success: true,
-      fundId: FAIDA_FUND.id,
-      meta: FAIDA_FUND,
-      data,
-      source: "csv",
-      path: FAIDA_CSV_PUBLIC_PATH,
-    })
+    const { data, stale, cachedAtMs } = await getCachedFaidaNavRecords()
+    return NextResponse.json(
+      {
+        success: true,
+        fundId: FAIDA_FUND.id,
+        meta: FAIDA_FUND,
+        data,
+        source: "csv",
+        path: FAIDA_CSV_PUBLIC_PATH,
+        ...(stale
+          ? {
+              stale: true,
+              ...(cachedAtMs != null ? { cachedAt: new Date(cachedAtMs).toISOString() } : {}),
+            }
+          : {}),
+      },
+      {
+        headers: {
+          "Cache-Control": stale ? CACHE_CONTROL_STALE_SNAPSHOT : cacheControlPublicSeconds(300),
+          ...(stale ? staleMetaHeaders(cachedAtMs) : {}),
+        },
+      },
+    )
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unable to read Faida Fund CSV."
     return NextResponse.json(
@@ -30,7 +49,7 @@ export async function GET() {
         error: message,
         source: "csv",
       },
-      { status: 200 },
+      { status: 200, headers: { "Cache-Control": "no-store" } },
     )
   }
 }

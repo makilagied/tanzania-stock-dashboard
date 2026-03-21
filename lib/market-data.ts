@@ -16,6 +16,10 @@ export interface HistoricalPoint {
   date: string
   close: number
   volume: number
+  /** Session high when the source provides OHLC (e.g. DSE). */
+  high?: number
+  /** Session low when the source provides OHLC (e.g. DSE). */
+  low?: number
 }
 
 export interface HistoricalCurrentPoint {
@@ -53,6 +57,10 @@ export interface LiveMoverPoint {
 
 const DSE_BASE_URL = "https://api.dse.co.tz/api"
 const DSE_HISTORY_URL = "https://dse.co.tz/api/get/market/prices/for/range/duration"
+/** DSE returns an empty series for very large `days` (e.g. 4500+); cap so we keep real prices, not synthetic fallback. */
+const DSE_HISTORY_MAX_DAYS = 4000
+/** Synthetic history is only for empty API responses; long spans compound noise into nonsense prices. */
+const FALLBACK_HISTORY_MAX_DAYS = 120
 const DSE_INDICES_URL = "https://dse.co.tz/get/last/traded/indices"
 const DSE_MOVERS_URL = "https://dse.co.tz/get/gainers/losers"
 const DSE_TOP_MOVERS_URL = "https://dse.co.tz/get/movers"
@@ -74,20 +82,76 @@ const parseClosingPrice = (value: unknown) => {
   return 0
 }
 
+/** Parse % from API when present; `null` if missing so we can compute a fallback. */
+const parseOptionalPercent = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string") {
+    const s = value.replace(/%/g, "").replace(/,/g, "").trim()
+    if (s === "") return null
+    const parsed = Number(s)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+/**
+ * Prefer exchange-reported %; try several field names. If missing, or API sends 0% while
+ * `change` is non-zero, fall back to (change / previousClose) × 100 with previousClose = price − change.
+ */
+export const resolveChangePercent = (item: any, price: number, change: number): number => {
+  const candidates = [
+    item.percentageChange,
+    item.percentChange,
+    item.percent_change,
+    item.percentage_change,
+    item.pctChange,
+    item.security?.percentageChange,
+    item.security?.percentChange,
+    item.marketData?.percentageChange,
+  ]
+
+  let apiPct: number | null = null
+  for (const c of candidates) {
+    const n = parseOptionalPercent(c)
+    if (n !== null) {
+      apiPct = n
+      break
+    }
+  }
+
+  const prevClose = price - change
+  const computed =
+    prevClose > 0 && Number.isFinite(change) && Number.isFinite(price) ? (change / prevClose) * 100 : null
+
+  if (apiPct !== null) {
+    if (Math.abs(apiPct) < 1e-9 && computed != null && Math.abs(computed) > 1e-6 && Math.abs(change) > 1e-6) {
+      return computed
+    }
+    return apiPct
+  }
+
+  return computed ?? 0
+}
+
 export const normalizeStocks = (raw: any[]): StockData[] => {
-  return raw.map((item) => ({
-    id: String(item.id || item.security?.id || item.companyId || item.security?.symbol || item.symbol || Math.random()),
-    symbol: item.security?.symbol || item.company?.symbol || item.symbol || "N/A",
-    name: item.security?.securityDesc || item.company?.name || item.name || "Unknown Company",
-    price: toNumber(item.marketPrice ?? item.openingPrice),
-    change: toNumber(item.change),
-    changePercent: toNumber(item.percentageChange),
-    volume: toNumber(item.volume),
-    marketCap: item.marketCap == null ? undefined : toNumber(item.marketCap),
-    bestBidPrice: item.bestBidPrice == null ? undefined : toNumber(item.bestBidPrice),
-    bestOfferPrice: item.bestOfferPrice == null ? undefined : toNumber(item.bestOfferPrice),
-    openingPrice: item.openingPrice == null ? undefined : toNumber(item.openingPrice),
-  }))
+  return raw.map((item) => {
+    const price = toNumber(item.marketPrice ?? item.openingPrice)
+    const change = toNumber(item.change)
+    return {
+      id: String(item.id || item.security?.id || item.companyId || item.security?.symbol || item.symbol || Math.random()),
+      symbol: item.security?.symbol || item.company?.symbol || item.symbol || "N/A",
+      name: item.security?.securityDesc || item.company?.name || item.name || "Unknown Company",
+      price,
+      change,
+      changePercent: resolveChangePercent(item, price, change),
+      volume: toNumber(item.volume),
+      marketCap: item.marketCap == null ? undefined : toNumber(item.marketCap),
+      bestBidPrice: item.bestBidPrice == null ? undefined : toNumber(item.bestBidPrice),
+      bestOfferPrice: item.bestOfferPrice == null ? undefined : toNumber(item.bestOfferPrice),
+      openingPrice: item.openingPrice == null ? undefined : toNumber(item.openingPrice),
+    }
+  })
 }
 
 export const getLiveStocks = async (): Promise<StockData[]> => {
@@ -119,36 +183,50 @@ const normalizeHistoryPayload = (data: any): HistoricalPoint[] => {
           ? data.prices
           : []
   return arrayPayload
-    .map((item: any) => ({
-      date: String(
-        item.date ??
-          item.trade_date ??
-          item.tradeDate ??
-          item.timestamp ??
-          item.day ??
-          item.createdAt ??
-          item.price_date ??
-          "",
+    .map((item: any) => {
+      const close = toNumber(
+        item.closing_price ??
+          item.close_price ??
+          item.closingPrice ??
+          item.close ??
+          item.marketPrice ??
+          item.price,
       )
-        .trim()
-        .slice(0, 10),
-      close: toNumber(
-        item.close ?? item.closing_price ?? item.close_price ?? item.closingPrice ?? item.marketPrice ?? item.price,
-      ),
-      volume: toNumber(item.volume ?? item.total_volume ?? item.totalVolume),
-    }))
+      const highRaw = toNumber(item.high ?? item.day_high ?? item.dayHigh ?? item.high_price)
+      const lowRaw = toNumber(item.low ?? item.day_low ?? item.dayLow ?? item.low_price)
+      const point: HistoricalPoint = {
+        date: String(
+          item.date ??
+            item.trade_date ??
+            item.tradeDate ??
+            item.timestamp ??
+            item.day ??
+            item.createdAt ??
+            item.price_date ??
+            "",
+        )
+          .trim()
+          .slice(0, 10),
+        close,
+        volume: toNumber(item.volume ?? item.total_volume ?? item.totalVolume),
+      }
+      if (highRaw > 0) point.high = highRaw
+      if (lowRaw > 0) point.low = lowRaw
+      return point
+    })
     .filter((point) => point.date.length > 0 && point.close > 0)
 }
 
 const generateFallbackHistory = (symbol: string, days: number, basePrice: number): HistoricalPoint[] => {
+  const span = Math.max(1, Math.min(days, FALLBACK_HISTORY_MAX_DAYS))
   const seed = symbol
     .split("")
     .reduce((sum, char) => sum + char.charCodeAt(0), 0)
   let lastPrice = basePrice > 0 ? basePrice : 100 + (seed % 900)
 
-  return Array.from({ length: days }).map((_, index) => {
+  return Array.from({ length: span }).map((_, index) => {
     const date = new Date()
-    date.setDate(date.getDate() - (days - index - 1))
+    date.setDate(date.getDate() - (span - index - 1))
     const wave = Math.sin((index + seed) / 4) * 0.012
     const trend = 0.0007
     const next = Math.max(1, lastPrice * (1 + trend + wave))
@@ -162,15 +240,21 @@ const generateFallbackHistory = (symbol: string, days: number, basePrice: number
   })
 }
 
+const fetchDseHistoryPayload = async (symbol: string, days: number) => {
+  const dseDays = Math.min(Math.max(7, days), DSE_HISTORY_MAX_DAYS)
+  const historyUrl = new URL(DSE_HISTORY_URL)
+  historyUrl.searchParams.set("security_code", symbol)
+  historyUrl.searchParams.set("days", String(dseDays))
+  historyUrl.searchParams.set("class", "EQUITY")
+  const response = await fetch(historyUrl.toString(), { next: { revalidate: 300 } })
+  if (!response.ok) return null
+  return response.json()
+}
+
 export const getHistoricalData = async (symbol: string, days = 30): Promise<HistoricalPoint[]> => {
   try {
-    const historyUrl = new URL(DSE_HISTORY_URL)
-    historyUrl.searchParams.set("security_code", symbol)
-    historyUrl.searchParams.set("days", String(days))
-    historyUrl.searchParams.set("class", "EQUITY")
-    const response = await fetch(historyUrl.toString(), { next: { revalidate: 300 } })
-    if (response.ok) {
-      const payload = await response.json()
+    const payload = await fetchDseHistoryPayload(symbol, days)
+    if (payload) {
       const normalized = normalizeHistoryPayload(payload)
       if (normalized.length > 0) return normalized
     }
@@ -205,13 +289,8 @@ export const getHistoricalDataWithMeta = async (
   days = 30,
 ): Promise<{ success: boolean; data: HistoricalPoint[]; current: HistoricalCurrentPoint[]; message: string }> => {
   try {
-    const historyUrl = new URL(DSE_HISTORY_URL)
-    historyUrl.searchParams.set("security_code", symbol)
-    historyUrl.searchParams.set("days", String(days))
-    historyUrl.searchParams.set("class", "EQUITY")
-    const response = await fetch(historyUrl.toString(), { next: { revalidate: 300 } })
-    if (response.ok) {
-      const payload = await response.json()
+    const payload = await fetchDseHistoryPayload(symbol, days)
+    if (payload) {
       const normalizedData = normalizeHistoryPayload(payload)
       const currentRaw = Array.isArray(payload?.current) ? payload.current : []
       const current: HistoricalCurrentPoint[] = currentRaw.map((item: any) => ({
