@@ -47,7 +47,9 @@ export type StockPeriodAnalytics = {
   maxDrawdownPct: number | null
   bestDayPct: number | null
   worstDayPct: number | null
+  /** Highest session high in the window; falls back to closes when OHLC is missing. */
   periodHighClose: number | null
+  /** Lowest session low in the window; falls back to closes when OHLC is missing. */
   periodLowClose: number | null
   avgVolume: number | null
   latestVolume: number | null
@@ -72,13 +74,22 @@ function stdSample(xs: number[]) {
 
 /** Parse YYYY-MM-DD to sortable UTC noon timestamp */
 export function historyToAscending(points: HistoricalPoint[]): StockHistoryRow[] {
-  return points
+  const sorted = points
     .map((p) => {
       const ts = parseStockHistoryDateTs(p.date)
       return { ...p, dateSort: ts }
     })
     .filter((p) => p.dateSort > 0 && p.close > 0)
     .sort((a, b) => a.dateSort - b.dateSort)
+
+  /** Same calendar date twice (revisions) — keep last row so min/max/returns aren’t duplicated. */
+  const deduped: StockHistoryRow[] = []
+  for (const row of sorted) {
+    const prev = deduped[deduped.length - 1]
+    if (prev && prev.date === row.date) deduped[deduped.length - 1] = row
+    else deduped.push(row)
+  }
+  return deduped
 }
 
 export function filterStockHistoryByPeriod(
@@ -167,6 +178,11 @@ export function computeStockPeriodAnalytics(
   const lastClose = latestRow.close
 
   if (slice.length < 2) {
+    const row0 = slice[0]
+    const periodHighOne =
+      row0 != null ? (row0.high != null && row0.high > 0 ? row0.high : row0.close) : null
+    const periodLowOne =
+      row0 != null ? (row0.low != null && row0.low > 0 ? row0.low : row0.close) : null
     return {
       period,
       rangeLabel: ANALYTICS_PERIOD_LABELS[period],
@@ -181,8 +197,8 @@ export function computeStockPeriodAnalytics(
       maxDrawdownPct: null,
       bestDayPct: null,
       worstDayPct: null,
-      periodHighClose: slice[0]?.close ?? null,
-      periodLowClose: slice[0]?.close ?? null,
+      periodHighClose: periodHighOne,
+      periodLowClose: periodLowOne,
       avgVolume: null,
       latestVolume: slice[slice.length - 1]?.volume ?? null,
       volumeVsAvgPct: null,
@@ -221,12 +237,17 @@ export function computeStockPeriodAnalytics(
 
   let peak = slice[0].close
   let maxDd = 0
-  let periodHigh = slice[0].close
-  let periodLow = slice[0].close
+  const r0 = slice[0]
+  const firstHigh = r0.high != null && r0.high > 0 ? r0.high : r0.close
+  const firstLow = r0.low != null && r0.low > 0 ? r0.low : r0.close
+  let periodHigh = firstHigh
+  let periodLow = firstLow
   for (const r of slice) {
+    const dayHigh = r.high != null && r.high > 0 ? r.high : r.close
+    const dayLow = r.low != null && r.low > 0 ? r.low : r.close
+    if (dayHigh > periodHigh) periodHigh = dayHigh
+    if (dayLow < periodLow) periodLow = dayLow
     const n = r.close
-    if (n > periodHigh) periodHigh = n
-    if (n < periodLow) periodLow = n
     if (n > peak) peak = n
     if (peak > 0) {
       const dd = (n - peak) / peak

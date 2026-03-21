@@ -38,6 +38,8 @@ type HistoryPoint = {
   date: string
   close: number
   volume: number
+  high?: number
+  low?: number
 }
 
 type ShareIndexPoint = {
@@ -54,10 +56,10 @@ type LiveMoverPoint = {
 }
 
 type StockOrder = {
-  buyPrice: number
-  buyQuantity: number
-  sellPrice: number
-  sellQuantity: number
+    buyPrice: number
+    buyQuantity: number
+    sellPrice: number
+    sellQuantity: number
 }
 
 type OrderBook = {
@@ -81,8 +83,8 @@ const formatCompact = (value: number) => {
 
 const formatCount = (value: number) => new Intl.NumberFormat("en-TZ").format(value)
 
-/** Max days the history API allows — analytics use this so metrics aren’t limited by chart range. */
-const STOCK_ANALYTICS_MAX_DAYS = 5000
+/** Analytics history window; DSE caps usable range (~4000 days) — see `DSE_HISTORY_MAX_DAYS` in market-data. */
+const STOCK_ANALYTICS_MAX_DAYS = 4000
 
 const HistoryTooltip = ({ active, payload }: ChartTooltipProps) => {
   if (!active || !payload || payload.length === 0) return null
@@ -104,8 +106,11 @@ const formatPctAnalytics = (value: number | null, digits = 2) => {
 export default function HomePage() {
   const [stocks, setStocks] = useState<StockData[]>([])
   const [history, setHistory] = useState<HistoryPoint[]>([])
+  /** Which symbol `history` belongs to (avoids showing another ticker’s series after switching). */
+  const [historySymbol, setHistorySymbol] = useState<string | null>(null)
   /** Full history for analytics (independent of chart `days`). */
   const [analyticsHistory, setAnalyticsHistory] = useState<HistoryPoint[]>([])
+  const [analyticsHistorySymbol, setAnalyticsHistorySymbol] = useState<string | null>(null)
   const [topMovers, setTopMovers] = useState<LiveMoverPoint[]>([])
   const [indices, setIndices] = useState<ShareIndexPoint[]>([])
   const [search, setSearch] = useState("")
@@ -128,6 +133,11 @@ export default function HomePage() {
   const [sortKey, setSortKey] = useState<"symbol" | "price" | "change" | "volume">("volume")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
   const stockAnalyticsSectionRef = useRef<HTMLElement | null>(null)
+  /** Latest selected ticker — used to ignore stale history responses after switching symbol. */
+  const selectedSymbolRef = useRef(selectedSymbol)
+  selectedSymbolRef.current = selectedSymbol
+  /** `${symbol}:${days}` for the in-flight chart request */
+  const pendingHistoryKeyRef = useRef<string>("")
 
   const selectedStock = stocks.find((s) => s.symbol === selectedSymbol) ?? null
   const totalVolume = stocks.reduce((sum, s) => sum + s.volume, 0)
@@ -173,11 +183,18 @@ export default function HomePage() {
     }
   }
 
-  /** Prefer long history for metrics; if the API returns nothing (e.g. huge `days`), use chart `history`. */
+  /** Prefer long history for metrics for the **current** symbol only; else chart `history` if it matches. */
   const historyForStockAnalytics = useMemo(() => {
-    if (analyticsHistory.length > 0) return analyticsHistory
-    return history
-  }, [analyticsHistory, history])
+    if (analyticsHistory.length > 0 && analyticsHistorySymbol === selectedSymbol) return analyticsHistory
+    if (history.length > 0 && historySymbol === selectedSymbol) return history
+    return []
+  }, [analyticsHistory, analyticsHistorySymbol, history, historySymbol, selectedSymbol])
+
+  /** Oldest → newest for Recharts (API often returns reverse order). */
+  const chartHistory = useMemo(() => {
+    if (historySymbol !== selectedSymbol) return []
+    return historyToAscending(history).map(({ date, close, volume }) => ({ date, close, volume }))
+  }, [history, historySymbol, selectedSymbol])
 
   const analyticsHistoryAscending = useMemo(
     () => historyToAscending(historyForStockAnalytics),
@@ -215,15 +232,25 @@ export default function HomePage() {
   }
 
   const fetchHistory = async (symbol: string, rangeDays: number) => {
+    const requestKey = `${symbol}:${rangeDays}`
+    pendingHistoryKeyRef.current = requestKey
+    setHistory([])
+    setHistorySymbol(null)
     try {
       setHistoryLoading(true)
       const res = await fetch(`/api/market/history/${encodeURIComponent(symbol)}?days=${rangeDays}`)
       const payload = await res.json()
-      setHistory(Array.isArray(payload?.data) ? payload.data : [])
+      const data = Array.isArray(payload?.data) ? payload.data : []
+      if (pendingHistoryKeyRef.current !== requestKey) return
+      setHistory(data)
+      setHistorySymbol(symbol)
     } catch {
-      setHistory([])
+      if (pendingHistoryKeyRef.current === requestKey) {
+        setHistory([])
+        setHistorySymbol(null)
+      }
     } finally {
-      setHistoryLoading(false)
+      if (pendingHistoryKeyRef.current === requestKey) setHistoryLoading(false)
     }
   }
 
@@ -311,19 +338,31 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!selectedSymbol) return
+    const symbolRequested = selectedSymbol
+    setAnalyticsHistory([])
+    setAnalyticsHistorySymbol(null)
     let cancelled = false
     setAnalyticsHistoryLoading(true)
     ;(async () => {
       try {
         const res = await fetch(
-          `/api/market/history/${encodeURIComponent(selectedSymbol)}?days=${STOCK_ANALYTICS_MAX_DAYS}`,
+          `/api/market/history/${encodeURIComponent(symbolRequested)}?days=${STOCK_ANALYTICS_MAX_DAYS}`,
         )
         const payload = await res.json()
-        if (!cancelled) setAnalyticsHistory(Array.isArray(payload?.data) ? payload.data : [])
+        const data = Array.isArray(payload?.data) ? payload.data : []
+        if (cancelled) return
+        if (selectedSymbolRef.current !== symbolRequested) return
+        setAnalyticsHistory(data)
+        setAnalyticsHistorySymbol(symbolRequested)
       } catch {
-        if (!cancelled) setAnalyticsHistory([])
+        if (!cancelled && selectedSymbolRef.current === symbolRequested) {
+          setAnalyticsHistory([])
+          setAnalyticsHistorySymbol(null)
+        }
       } finally {
-        if (!cancelled) setAnalyticsHistoryLoading(false)
+        if (!cancelled && selectedSymbolRef.current === symbolRequested) {
+          setAnalyticsHistoryLoading(false)
+        }
       }
     })()
     return () => {
@@ -358,7 +397,7 @@ export default function HomePage() {
         {/* Indices row below navbar */}
         <div className="mb-4 flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {indices.map((idx) => (
-            <button
+    <button
               key={idx.code}
               type="button"
               className="flex shrink-0 items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-[10px] shadow-sm transition-colors hover:shadow-md"
@@ -368,10 +407,10 @@ export default function HomePage() {
               <span className={`tabular-nums font-medium ${idx.change >= 0 ? "text-chart-3" : "text-chart-5"}`}>
                 {idx.change >= 0 ? "+" : ""}
                 {idx.change.toFixed(2)}
-              </span>
-            </button>
+      </span>
+    </button>
           ))}
-        </div>
+                  </div>
 
         {/* ── Body Grid: Left (chart + movers) | Right (securities) ── */}
         <div className="grid gap-4 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px]">
@@ -386,21 +425,42 @@ export default function HomePage() {
                 <div className="flex w-full min-w-0 items-start justify-between gap-3 lg:min-w-0 lg:flex-1 lg:items-center">
                   <div className="min-w-0 flex-1">
                     {selectedStock ? (
-                      <p className="text-sm font-semibold">
-                        {selectedStock.symbol} {formatPrice(selectedStock.price)}{" "}
-                        <span className={selectedStock.change >= 0 ? "text-chart-3" : "text-chart-5"}>
-                          ({selectedStock.change >= 0 ? "+" : ""}
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="text-sm font-semibold tabular-nums">
+                          {selectedStock.symbol} {formatPrice(selectedStock.price)}
+                        </p>
+                        <span
+                          className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                            selectedStock.change >= 0
+                              ? "bg-chart-3/10 text-chart-3"
+                              : "bg-chart-5/10 text-chart-5"
+                          }`}
+                        >
+                          {selectedStock.change >= 0 ? (
+                            <ArrowUpRight className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                          ) : (
+                            <ArrowDownRight className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                          )}
+                          {selectedStock.change >= 0 ? "+" : ""}
+                          {selectedStock.change.toFixed(2)}
+                        </span>
+                        <span
+                          className={`text-xs font-semibold tabular-nums ${
+                            selectedStock.changePercent >= 0 ? "text-chart-3" : "text-chart-5"
+                          }`}
+                        >
+                          ({selectedStock.changePercent >= 0 ? "+" : ""}
                           {selectedStock.changePercent.toFixed(2)}%)
                         </span>
-                      </p>
+                      </div>
                     ) : (
                       <p className="text-sm font-semibold">—</p>
                     )}
                     <p className="text-[10px] text-muted-foreground">{selectedStock?.name ?? "Select a stock below"}</p>
                   </div>
-                  <Button
+                <Button
                     type="button"
-                    variant="outline"
+                  variant="outline"
                     size="icon"
                     className="h-8 w-8 shrink-0 rounded-lg border-border/80 bg-muted/30 lg:hidden"
                     onClick={() => setIsStocksSidebarOpen(true)}
@@ -408,7 +468,7 @@ export default function HomePage() {
                     title="All securities"
                   >
                     <List className="h-4 w-4" />
-                  </Button>
+                </Button>
                 </div>
                 <div className="flex flex-wrap gap-1 sm:justify-end lg:justify-end lg:shrink-0">
                   {[30, 90, 180, 365].map((d) => (
@@ -425,45 +485,55 @@ export default function HomePage() {
                       {d}D
                     </button>
                   ))}
-                </div>
               </div>
+            </div>
               <div className="h-[220px] p-3 lg:h-auto lg:min-h-0 lg:flex-1">
                 {historyLoading ? (
-                  <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Loading chart...</div>
-                ) : history.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={history} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.18} />
-                          <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="date" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} dy={6} />
-                      <YAxis
-                        tick={{ fontSize: 9 }}
-                        axisLine={false}
-                        tickLine={false}
-                        tickFormatter={(v) => formatCompact(Number(v))}
-                        dx={-4}
-                        width={48}
-                      />
-                      <Tooltip content={<HistoryTooltip />} />
-                      <Area
-                        type="monotone"
-                        dataKey="close"
-                        stroke={isDarkMode ? "#10b981" : "#059669"}
-                        fill="url(#chartGrad)"
-                        strokeWidth={2.5}
-                        dot={false}
-                        isAnimationActive={true}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  <div className="flex h-full flex-col items-center justify-center gap-3 px-4">
+                    <div
+                      className="h-9 w-9 animate-spin rounded-full border-2 border-muted border-t-chart-3"
+                      style={{ animationDuration: "0.85s" }}
+                      aria-hidden
+                    />
+                    <p className="text-center text-xs font-medium text-muted-foreground">Loading price history…</p>
+                  </div>
+                ) : chartHistory.length > 0 ? (
+                  <div className="h-full w-full min-h-[180px]" key={`${selectedSymbol}-${days}`}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartHistory} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id={`stockChartFill-${selectedSymbol}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="var(--chart-3)" stopOpacity={0.35} />
+                            <stop offset="100%" stopColor="var(--chart-3)" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="date" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} dy={6} />
+                        <YAxis
+                          tick={{ fontSize: 9 }}
+                          axisLine={false}
+                          tickLine={false}
+                          tickFormatter={(v) => formatCompact(Number(v))}
+                          dx={-4}
+                          width={48}
+                          domain={["auto", "auto"]}
+                        />
+                        <Tooltip content={<HistoryTooltip />} />
+                        <Area
+                          type="monotone"
+                          dataKey="close"
+                          stroke="var(--chart-3)"
+                          fill={`url(#stockChartFill-${selectedSymbol})`}
+                          strokeWidth={2.5}
+                          dot={false}
+                          isAnimationActive={true}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
                 ) : (
                   <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
                     No historical data available
-                  </div>
+          </div>
                 )}
               </div>
             </section>
@@ -484,7 +554,7 @@ export default function HomePage() {
                         <p className="text-xs font-semibold tabular-nums text-chart-3">
                           {formatCompact(selectedOrderBook?.bestBuyPrice || 0)}
                         </p>
-                      </div>
+                </div>
                       <div className="rounded-md bg-chart-5/10 p-2 shadow-sm">
                         <p className="text-[10px] text-muted-foreground">Best Sell Price</p>
                         <p className="text-xs font-semibold tabular-nums text-chart-5">
@@ -501,7 +571,7 @@ export default function HomePage() {
                       <span className="text-[10px] text-muted-foreground">
                         Best: {formatCompact(selectedOrderBook?.bestBuyPrice || 0)}
                       </span>
-                    </div>
+                </div>
                     {selectedOrderBookLoading ? (
                       <p className="text-[10px] text-muted-foreground">Loading...</p>
                     ) : (
@@ -510,7 +580,7 @@ export default function HomePage() {
                           <div key={`selected-buy-${idx}`} className="flex justify-between py-1 text-[11px]">
                             <span className="tabular-nums">{formatCompact(order.buyPrice)}</span>
                             <span className="tabular-nums text-muted-foreground">{formatCount(order.buyQuantity)}</span>
-                          </div>
+                </div>
                         ))}
                       </div>
                     )}
@@ -580,11 +650,11 @@ export default function HomePage() {
                           <div>
                             <p className="text-xs font-medium">{s.symbol}</p>
                             <p className="text-[10px] text-muted-foreground">{s.name}</p>
-                          </div>
+          </div>
                           <span className="text-[10px] font-medium text-chart-3">{Math.abs(s.change).toFixed(2)}</span>
-                        </div>
+                  </div>
                       ))}
-                    </div>
+                </div>
                   )}
                 </div>
 
@@ -623,10 +693,10 @@ export default function HomePage() {
                     Dar es Salaam Stock Exchange (DSE)
                   </a>
                   . Values are indicative; confirm with the exchange or your broker before trading.
-                </div>
+              </div>
               </section>
-            </div>
-          </div>
+                        </div>
+                        </div>
 
           {/* RIGHT COLUMN — All Securities */}
           <section className="hidden flex-col rounded-xl bg-card shadow-md lg:flex lg:h-[650px]">
@@ -635,7 +705,7 @@ export default function HomePage() {
               <div>
                 <p className="text-sm font-semibold">All Securities</p>
                 <p className="text-[10px] text-muted-foreground">{visibleStocks.length} / {stocks.length} listed</p>
-              </div>
+                        </div>
               <div className="relative w-36">
                 <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -657,36 +727,36 @@ export default function HomePage() {
                       onClick={() => handleSort("symbol")}
                     >
                       Symbol{sortIcon("symbol")}
-                    </th>
+                      </th>
                     <th
                       className="cursor-pointer px-3 py-2 text-right font-medium text-muted-foreground hover:text-foreground"
                       onClick={() => handleSort("price")}
                     >
                       Price{sortIcon("price")}
-                    </th>
+                      </th>
                     <th
                       className="cursor-pointer px-3 py-2 text-right font-medium text-muted-foreground hover:text-foreground"
                       onClick={() => handleSort("change")}
                     >
                       Chg{sortIcon("change")}
-                    </th>
+                      </th>
                     <th
                       className="cursor-pointer px-3 py-2 text-right font-medium text-muted-foreground hover:text-foreground"
                       onClick={() => handleSort("volume")}
                     >
                       Vol{sortIcon("volume")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
                   {loading && stocks.length === 0 ? (
                     Array.from({ length: 8 }).map((_, i) => (
                       <tr key={i} className="border-b border-border">
                         <td className="px-3 py-2.5" colSpan={4}>
                           <div className="h-3 animate-pulse rounded bg-muted" />
-                        </td>
-                      </tr>
-                    ))
+                          </td>
+                        </tr>
+                      ))
                   ) : visibleStocks.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">
@@ -705,12 +775,12 @@ export default function HomePage() {
                         <td className="px-3 py-2">
                           <p className="font-medium">{stock.symbol}</p>
                           <p className="truncate text-[10px] text-muted-foreground max-w-[100px]">{stock.name}</p>
-                        </td>
+                          </td>
                         <td className="px-3 py-2 text-right font-medium tabular-nums">
                           {formatPrice(stock.price)}
-                        </td>
+                          </td>
                         <td className="px-3 py-2 text-right">
-                          <span
+                            <span
                             className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
                               stock.change >= 0
                                 ? "bg-chart-3/10 text-chart-3"
@@ -722,21 +792,21 @@ export default function HomePage() {
                             ) : (
                               <ArrowDownRight className="h-2.5 w-2.5" />
                             )}
-                            {stock.change >= 0 ? "+" : ""}
+                              {stock.change >= 0 ? "+" : ""}
                             {stock.change.toFixed(2)}
-                          </span>
-                        </td>
+                            </span>
+                          </td>
                         <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
                           {formatCompact(stock.volume)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
           </section>
-        </div>
+      </div>
 
         <section
           ref={stockAnalyticsSectionRef}
@@ -749,18 +819,19 @@ export default function HomePage() {
               <LineChart className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
               <div>
                 <h2 className="text-sm font-semibold">Price &amp; liquidity context — {selectedSymbol}</h2>
-                <p className="text-[11px] text-muted-foreground">
-                  Uses full DSE history when available (up to {STOCK_ANALYTICS_MAX_DAYS} days), otherwise the same series as
-                  the chart. Planning only — not investment advice.
-                </p>
-                {analyticsHistory.length === 0 && history.length > 0 && !analyticsHistoryLoading ? (
+                <p className="text-[11px] text-muted-foreground">Planning only — not investment advice.</p>
+                {analyticsHistory.length === 0 &&
+                analyticsHistorySymbol === selectedSymbol &&
+                history.length > 0 &&
+                historySymbol === selectedSymbol &&
+                !analyticsHistoryLoading ? (
                   <p className="mt-1 text-[10px] text-amber-700 dark:text-amber-500/90">
                     Full-history request returned no rows for this symbol — metrics use the chart window until data is
                     available.
                   </p>
                 ) : null}
+                </div>
               </div>
-            </div>
             <div className="flex flex-wrap gap-1">
               {ANALYTICS_PERIOD_OPTIONS.map(({ id, short }) => (
                 <Button
@@ -772,7 +843,7 @@ export default function HomePage() {
                   onClick={() => setStockPeriod(id)}
                 >
                   {short}
-                </Button>
+              </Button>
               ))}
             </div>
           </div>
@@ -791,12 +862,6 @@ export default function HomePage() {
                 {stockAnalytics.observations === 1 ? "" : "s"}). Widen the analytics period (e.g. 3M or YTD) or check DSE
                 data for this symbol.
               </p>
-              {stockAnalytics.maTrendNote ? (
-                <div className="rounded-lg bg-muted/40 p-3 text-[11px] text-muted-foreground shadow-sm">
-                  <span className="font-medium text-foreground">Moving averages: </span>
-                  {stockAnalytics.maTrendNote}
-                </div>
-              ) : null}
             </div>
           ) : (
             <>
@@ -819,7 +884,7 @@ export default function HomePage() {
                   >
                     {formatPctAnalytics(stockAnalytics.totalReturnPct)}
                   </p>
-                </div>
+              </div>
                 <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     Annualized return <span className="normal-case opacity-80">(approx.)</span>
@@ -882,12 +947,6 @@ export default function HomePage() {
                   <p className="mt-0.5 text-[10px] text-muted-foreground">Trading days in this analytics slice</p>
                 </div>
               </div>
-              {stockAnalytics.maTrendNote ? (
-                <div className="mt-3 rounded-lg bg-muted/40 p-3 text-[11px] text-muted-foreground shadow-sm">
-                  <span className="font-medium text-foreground">Moving averages (full history): </span>
-                  {stockAnalytics.maTrendNote}
-                </div>
-              ) : null}
             </>
           )}
         </section>
@@ -907,7 +966,7 @@ export default function HomePage() {
               <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setIsStocksSidebarOpen(false)}>
                 <X className="h-3.5 w-3.5" />
               </Button>
-            </div>
+                        </div>
             <div className="p-3">
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
@@ -917,8 +976,8 @@ export default function HomePage() {
                   onChange={(e) => setSearch(e.target.value)}
                   className="h-8 pl-7 text-[11px]"
                 />
-              </div>
-            </div>
+                        </div>
+                      </div>
             <div className="h-[calc(100%-94px)] overflow-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
               <div className="divide-y divide-border">
                 {visibleStocks.map((stock) => (
@@ -934,22 +993,22 @@ export default function HomePage() {
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-medium">{stock.symbol}</p>
                         <p className="truncate text-[10px] text-muted-foreground">{stock.name}</p>
-                      </div>
+                        </div>
                       <div className="shrink-0 text-right">
                         <p className="text-xs font-semibold tabular-nums">{formatPrice(stock.price)}</p>
                         <span className={stock.change >= 0 ? "text-chart-3 text-[10px]" : "text-chart-5 text-[10px]"}>
                           {stock.change >= 0 ? "+" : ""}
                           {stock.change.toFixed(2)}
                         </span>
+                        </div>
                       </div>
-                    </div>
                   </button>
                 ))}
-              </div>
-            </div>
+                    </div>
+                  </div>
           </aside>
-        </div>
-      )}
+            </div>
+          )}
 
       {/* ── Stock Detail Modal (bottom sheet on mobile, centered on desktop) ── */}
       {activeStock && (
@@ -994,13 +1053,13 @@ export default function HomePage() {
                 <div className="rounded-lg bg-muted/50 px-3 py-2">
                   <p className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Price</p>
                   <p className="text-xs font-semibold tabular-nums">{formatCompact(activeStock.price)}</p>
-                </div>
+                        </div>
                 <div className="rounded-lg bg-muted/50 px-3 py-2">
                   <p className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Change</p>
                   <p className={`text-xs font-semibold tabular-nums ${activeStock.change >= 0 ? "text-chart-3" : "text-chart-5"}`}>
                     {activeStock.change >= 0 ? "+" : ""}{activeStock.changePercent.toFixed(2)}%
                   </p>
-                </div>
+                    </div>
                 <div className="rounded-lg bg-muted/50 px-3 py-2">
                   <p className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">Volume</p>
                   <p className="text-xs font-semibold tabular-nums">{formatCompact(activeStock.volume)}</p>
@@ -1020,7 +1079,7 @@ export default function HomePage() {
                       <span className="text-[10px] text-muted-foreground">
                         Best: {formatCompact(activeOrderBook?.bestBuyPrice || 0)}
                       </span>
-                    </div>
+                              </div>
                     <div className="space-y-1">
                       {(activeOrderBook?.orders ?? [])
                         .filter((o) => o.buyQuantity > 0)
@@ -1029,13 +1088,13 @@ export default function HomePage() {
                           <div key={`buy-${idx}`} className="flex justify-between text-[11px]">
                             <span className="tabular-nums">{formatCompact(order.buyPrice)}</span>
                             <span className="tabular-nums text-muted-foreground">{formatCount(order.buyQuantity)}</span>
-                          </div>
+                              </div>
                         ))}
                       {(activeOrderBook?.orders ?? []).filter((o) => o.buyQuantity > 0).length === 0 && (
                         <p className="text-[10px] text-muted-foreground">No buy orders</p>
-                      )}
-                    </div>
-                  </div>
+                            )}
+                              </div>
+                          </div>
 
                   {/* Sell */}
                   <div className="rounded-lg border border-chart-5/20 bg-chart-5/5 p-3">
@@ -1044,7 +1103,7 @@ export default function HomePage() {
                       <span className="text-[10px] text-muted-foreground">
                         Best: {formatCompact(activeOrderBook?.bestSellPrice || 0)}
                       </span>
-                    </div>
+                        </div>
                     <div className="space-y-1">
                       {(activeOrderBook?.orders ?? [])
                         .filter((o) => o.sellQuantity > 0)
@@ -1053,15 +1112,15 @@ export default function HomePage() {
                           <div key={`sell-${idx}`} className="flex justify-between text-[11px]">
                             <span className="tabular-nums">{formatCompact(order.sellPrice)}</span>
                             <span className="tabular-nums text-muted-foreground">{formatCount(order.sellQuantity)}</span>
-                          </div>
+                    </div>
                         ))}
                       {(activeOrderBook?.orders ?? []).filter((o) => o.sellQuantity > 0).length === 0 && (
                         <p className="text-[10px] text-muted-foreground">No sell orders</p>
-                      )}
+                  )}
                     </div>
-                  </div>
                 </div>
-              )}
+              </div>
+            )}
             </div>
           </div>
         </div>
