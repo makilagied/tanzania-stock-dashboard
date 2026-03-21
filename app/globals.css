@@ -201,3 +201,139 @@
   from { opacity: 0; transform: translateY(100%); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ── 404 / decorative market chart motion ── */
+@keyframes nfMeshDrift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(2%, -1%) scale(1.02);
+  }
+  66% {
+    transform: translate(-1%, 2%) scale(0.98);
+  }
+}
+
+@keyframes nfGridPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes nfLineDraw {
+  0% {
+    stroke-dashoffset: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes nfAreaShimmer {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+@keyframes nfFloatSlow {
+  0%,
+  100% {
+    transform: translateY(0) translateX(0);
+  }
+  50% {
+    transform: translateY(-8px) translateX(4px);
+  }
+}
+
+@keyframes nfBarRhythm {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+    opacity: 0.35;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes nfSpark {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(1.15);
+  }
+}
+
+.nf-mesh-a {
+  animation: nfMeshDrift 18s ease-in-out infinite;
+}
+.nf-mesh-b {
+  animation: nfMeshDrift 22s ease-in-out infinite reverse;
+}
+.nf-mesh-c {
+  animation: nfMeshDrift 26s ease-in-out infinite;
+}
+.nf-grid-anim {
+  animation: nfGridPulse 5s ease-in-out infinite;
+}
+.nf-spark-a {
+  animation: nfSpark 3s ease-in-out infinite;
+}
+.nf-spark-b {
+  animation: nfSpark 4.2s ease-in-out infinite 0.6s;
+}
+.nf-spark-c {
+  animation: nfSpark 2.8s ease-in-out infinite 1s;
+}
+.nf-chart-layer-float {
+  animation: nfFloatSlow 12s ease-in-out infinite;
+}
+.nf-mini-chart-float {
+  animation: nfFloatSlow 9s ease-in-out 1s infinite;
+}
+.nf-area-a {
+  animation: nfAreaShimmer 6s ease-in-out infinite;
+}
+.nf-area-b {
+  animation: nfAreaShimmer 5s ease-in-out 0.4s infinite;
+}
+.nf-line-primary {
+  animation: nfLineDraw 3.5s ease-out infinite alternate;
+}
+.nf-line-ghost {
+  animation: nfLineDraw 4.5s ease-out 0.8s infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nf-mesh-a,
+  .nf-mesh-b,
+  .nf-mesh-c,
+  .nf-grid-anim,
+  .nf-spark-a,
+  .nf-spark-b,
+  .nf-spark-c,
+  .nf-chart-layer-float,
+  .nf-mini-chart-float,
+  .nf-area-a,
+  .nf-area-b,
+  .nf-line-primary,
+  .nf-line-ghost,
+  .nf-animate-bar {
+    animation: none !important;
+  }
+}
