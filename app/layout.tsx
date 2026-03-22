@@ -17,6 +17,27 @@ const sourceSansPro = Source_Sans_Pro({
   weight: ["400", "600", "700"],
 })
 
+const siteJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "Uwekezaji Online",
+  alternateName: [
+    "Investors Dashboard",
+    "Uwekezaji",
+    "Soko la hisa Tanzania",
+    "Mifuko ya uwekezaji — UTT, iTrust, Inuka, Faida",
+  ],
+  url: "https://www.uwekezaji.online",
+  description:
+    "Uwekezaji Online (Investors Dashboard): soko la hisa Tanzania (DSE), mifuko ya uwekezaji (UTT, iTrust, Inuka, Faida, Vertex, ZAN), faharasa/indeksi na bei za moja kwa moja.",
+  inLanguage: "en-TZ",
+  publisher: {
+    "@type": "Organization",
+    name: "Uwekezaji Online",
+    url: "https://www.uwekezaji.online",
+  },
+}
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.uwekezaji.online"),
   title: {
@@ -24,8 +45,19 @@ export const metadata: Metadata = {
     template: "%s · Uwekezaji Online",
   },
   description:
-    "Uwekezaji Online — DSE stocks and mutual funds. Live market data from the Dar es Salaam Stock Exchange.",
+    "Uwekezaji Online — soko la hisa Tanzania (DSE), mifuko ya uwekezaji (UTT, iTrust, Inuka, Faida na zaidi), bei za moja kwa moja, faharasa na chati.",
   generator: "makilagied",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
   icons: {
     icon: [
       { url: "/icon-uwekezaji.svg", type: "image/svg+xml" },
@@ -36,6 +68,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_TZ",
+    alternateLocale: ["sw_TZ"],
     siteName: "Uwekezaji Online",
     images: [{ url: "/logo-uwekezaji.png", alt: "Investors Dashboard — Uwekezaji Online" }],
   },
@@ -53,6 +86,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={`${playfairDisplay.variable} ${sourceSansPro.variable} antialiased`}>
       <body className="font-sans">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd) }}
+        />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="theme" disableTransitionOnChange>
           {children}
         </ThemeProvider>
