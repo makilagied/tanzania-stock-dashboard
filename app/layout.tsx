@@ -26,6 +26,23 @@ export const metadata: Metadata = {
   description:
     "Uwekezaji Online — DSE stocks and mutual funds. Live market data from the Dar es Salaam Stock Exchange.",
   generator: "makilagied",
+  icons: {
+    icon: [
+      { url: "/icon-uwekezaji.svg", type: "image/svg+xml" },
+      { url: "/icon-uwekezaji.png", type: "image/png" },
+    ],
+    apple: "/icon-uwekezaji.png",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_TZ",
+    siteName: "Uwekezaji Online",
+    images: [{ url: "/logo-uwekezaji.png", alt: "Investors Dashboard — Uwekezaji Online" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: ["/logo-uwekezaji.png"],
+  },
 }
 
 export default function RootLayout({

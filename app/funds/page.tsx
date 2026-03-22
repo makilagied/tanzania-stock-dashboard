@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import { ChevronDown, Moon, PieChart, RefreshCw, Sun, TrendingUp } from "lucide-react"
+import { ChevronDown, Moon, RefreshCw, Sun, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
@@ -189,11 +189,7 @@ export default function FundsPage() {
 
   return (
     <div className="min-h-screen bg-background font-sans">
-      <SiteHeader
-        icon={PieChart}
-        title="Funds & ETFs"
-        subtitle="iTrust, UTT, Faida, Inuka, Vertex, ZAN"
-      >
+      <SiteHeader title="Investors Dashboard" subtitle="Uwekezaji Online">
         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={toggleDarkMode}>
           {isDarkMode ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
         </Button>
