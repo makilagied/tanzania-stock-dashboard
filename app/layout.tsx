@@ -18,9 +18,14 @@ const sourceSansPro = Source_Sans_Pro({
 })
 
 export const metadata: Metadata = {
-  title: "Investor's Dashboard",
-  description: "Real-time stock market data from Dar es Salaam Stock Exchange",
-    generator: 'makilagied'
+  metadataBase: new URL("https://www.uwekezaji.online"),
+  title: {
+    default: "Investors Dashboard · Uwekezaji Online",
+    template: "%s · Uwekezaji Online",
+  },
+  description:
+    "Uwekezaji Online — DSE stocks and mutual funds. Live market data from the Dar es Salaam Stock Exchange.",
+  generator: "makilagied",
 }
 
 export default function RootLayout({
