@@ -9,7 +9,6 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 import {
   ArrowDownRight,
   ArrowUpRight,
-  BarChart3,
   LineChart,
   List,
   Moon,
@@ -376,11 +375,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background font-sans">
-      <SiteHeader
-        icon={BarChart3}
-        title="DSE Market"
-        subtitle="Dar es Salaam Stock Exchange"
-      >
+      <SiteHeader title="Investors Dashboard" subtitle="Uwekezaji Online">
         {lastUpdated && (
           <span className="hidden text-[10px] text-muted-foreground xl:block">{lastUpdated.toLocaleTimeString()}</span>
         )}
