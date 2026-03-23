@@ -15,7 +15,21 @@ export async function GET(
     const daysParam = request.nextUrl.searchParams.get("days")
     const days = Math.min(4000, Math.max(7, Number(daysParam) || 30))
     const upper = symbol.toUpperCase()
-    const { data: history, stale, cachedAtMs } = await getCachedHistoricalDataWithMeta(upper, days)
+    const { data: history, stale, cachedAtMs, outage } = await getCachedHistoricalDataWithMeta(upper, days)
+    if (outage) {
+      return NextResponse.json(
+        {
+          success: false,
+          symbol: upper,
+          days,
+          data: [],
+          current: [],
+          message: history.message,
+          outage: true,
+        },
+        { status: 200, headers: { "Cache-Control": "no-store" } },
+      )
+    }
     return NextResponse.json(
       {
         success: history.success,
@@ -40,7 +54,7 @@ export async function GET(
     )
   } catch {
     return NextResponse.json(
-      { error: "Unable to fetch historical data." },
+      { success: false, error: "Unable to fetch historical data.", data: [], outage: true },
       { status: 500, headers: { "Cache-Control": "no-store" } },
     )
   }

@@ -7,30 +7,36 @@ import {
 import { getCachedLiveStocks } from "@/lib/market-data-cached"
 
 export async function GET() {
-  try {
-    const { data: stocks, stale, cachedAtMs } = await getCachedLiveStocks()
+  const { data: stocks, stale, cachedAtMs, outage } = await getCachedLiveStocks()
+
+  if (outage) {
     return NextResponse.json(
       {
-        data: stocks,
-        source: stale ? "dse-cache" : "dse",
-        ...(stale
-          ? {
-              stale: true,
-              ...(cachedAtMs != null ? { cachedAt: new Date(cachedAtMs).toISOString() } : {}),
-            }
-          : {}),
+        data: [],
+        source: "unavailable",
+        outage: true,
+        error: "Live market feed is unavailable and there is no cached snapshot yet. Try again shortly.",
       },
-      {
-        headers: {
-          "Cache-Control": stale ? CACHE_CONTROL_STALE_SNAPSHOT : cacheControlPublicSeconds(60),
-          ...(stale ? staleMetaHeaders(cachedAtMs) : {}),
-        },
-      },
-    )
-  } catch {
-    return NextResponse.json(
-      { data: [], source: "fallback", error: "Unable to fetch stocks right now." },
       { status: 200, headers: { "Cache-Control": "no-store" } },
     )
   }
+
+  return NextResponse.json(
+    {
+      data: stocks,
+      source: stale ? "dse-cache" : "dse",
+      ...(stale
+        ? {
+            stale: true,
+            ...(cachedAtMs != null ? { cachedAt: new Date(cachedAtMs).toISOString() } : {}),
+          }
+        : {}),
+    },
+    {
+      headers: {
+        "Cache-Control": stale ? CACHE_CONTROL_STALE_SNAPSHOT : cacheControlPublicSeconds(60),
+        ...(stale ? staleMetaHeaders(cachedAtMs) : {}),
+      },
+    },
+  )
 }

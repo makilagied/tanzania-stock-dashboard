@@ -8,7 +8,13 @@ import { getCachedTopMovers } from "@/lib/market-data-cached"
 
 export async function GET() {
   try {
-    const { data: payload, stale, cachedAtMs } = await getCachedTopMovers()
+    const { data: payload, stale, cachedAtMs, outage } = await getCachedTopMovers()
+    if (outage) {
+      return NextResponse.json(
+        { success: false, data: [], error: "Top movers unavailable and no cached snapshot.", outage: true },
+        { status: 200, headers: { "Cache-Control": "no-store" } },
+      )
+    }
     return NextResponse.json(
       {
         success: payload.success,
