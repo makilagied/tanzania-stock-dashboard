@@ -1,10 +1,14 @@
 import type React from "react"
 import type { Metadata } from "next"
+import Script from "next/script"
 import { Playfair_Display, Source_Sans_3 as Source_Sans_Pro } from "next/font/google"
 import { CalculatorModal } from "@/components/calculator-modal"
 import { MobileAppBar } from "@/components/mobile-app-bar"
 import { ThemeProvider } from "@/components/theme-provider"
 import "./globals.css"
+
+/** Google Analytics 4 — override with `NEXT_PUBLIC_GA_MEASUREMENT_ID` in env */
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-LPM333VNRE"
 
 const playfairDisplay = Playfair_Display({
   subsets: ["latin"],
@@ -92,6 +96,18 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd) }}
         />
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GA_MEASUREMENT_ID}');
+          `}
+        </Script>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="theme" disableTransitionOnChange>
           <div className="pb-[calc(3.25rem+env(safe-area-inset-bottom,0px))] lg:pb-0">{children}</div>
           <CalculatorModal />
