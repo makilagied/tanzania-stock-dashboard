@@ -22,7 +22,7 @@ export function SiteHeader({ title, subtitle, children }: SiteHeaderProps) {
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/"
-    return pathname.startsWith(href)
+    return pathname === href || pathname.startsWith(`${href}/`)
   }
 
   return (
@@ -51,7 +51,7 @@ export function SiteHeader({ title, subtitle, children }: SiteHeaderProps) {
         </Link>
 
         <nav
-          className="flex shrink-0 items-center rounded-lg border border-border/80 bg-muted/40 p-0.5 shadow-sm"
+          className="hidden shrink-0 items-center rounded-lg border border-border/80 bg-muted/40 p-0.5 shadow-sm lg:flex"
           aria-label="Main"
         >
           {NAV.map((item) => {
