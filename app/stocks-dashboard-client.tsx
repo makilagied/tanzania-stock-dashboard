@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
+import { MarketDowntime } from "@/components/market-downtime"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
 import { ANALYTICS_PERIOD_OPTIONS, type FundAnalyticsPeriod } from "@/lib/fund-analytics"
@@ -123,6 +124,10 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** Live DSE feed failed and no server-side snapshot existed (or client could not reach API). */
+  const [marketOutage, setMarketOutage] = useState(false)
+  /** ISO timestamp when `stale` snapshot was written (from API). */
+  const [staleFeedAt, setStaleFeedAt] = useState<string | null>(null)
   const [activeStock, setActiveStock] = useState<StockData | null>(null)
   const [activeOrderBook, setActiveOrderBook] = useState<OrderBook | null>(null)
   const [modalLoading, setModalLoading] = useState(false)
@@ -140,6 +145,9 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
   const pendingHistoryKeyRef = useRef<string>("")
 
   const selectedStock = stocks.find((s) => s.symbol === selectedSymbol) ?? null
+
+  /** Keep showing downtime while retrying (loading) so the layout does not flash empty main. */
+  const showMarketDowntime = stocks.length === 0 && (marketOutage || error != null)
   const totalVolume = stocks.reduce((sum, s) => sum + s.volume, 0)
   const gainers = stocks.filter((s) => s.change > 0)
   const losers = stocks.filter((s) => s.change < 0)
@@ -221,11 +229,22 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
       const res = await fetch("/api/market/stocks")
       const payload = await res.json()
       const rows: StockData[] = Array.isArray(payload?.data) ? payload.data : []
+      const outage = Boolean(payload?.outage) || payload?.source === "unavailable"
       setStocks(rows)
-      if (rows.length > 0 && !rows.find((r) => r.symbol === selectedSymbol)) setSelectedSymbol(rows[0].symbol)
-      setLastUpdated(new Date())
+      setMarketOutage(outage && rows.length === 0)
+      setStaleFeedAt(payload?.stale && payload?.cachedAt ? String(payload.cachedAt) : null)
+      if (rows.length > 0) {
+        setMarketOutage(false)
+        if (!rows.find((r) => r.symbol === selectedSymbol)) setSelectedSymbol(rows[0].symbol)
+        setLastUpdated(new Date())
+      } else if (!outage) {
+        setLastUpdated(new Date())
+      }
     } catch {
       setError("Unable to fetch market data.")
+      setStocks([])
+      setMarketOutage(true)
+      setStaleFeedAt(null)
     } finally {
       setLoading(false)
     }
@@ -390,8 +409,23 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
 
       {seoIntro}
 
-      {/* ── Main ── */}
-      <main className="mx-auto max-w-[1600px] px-4 py-4 lg:px-6 lg:py-5">
+      {showMarketDowntime ? (
+        <MarketDowntime onRetry={fetchStocks} loading={loading} />
+      ) : (
+        <>
+          {staleFeedAt && (
+            <div
+              className="border-b border-amber-500/25 bg-amber-500/10 px-4 py-2.5 text-center text-[11px] leading-snug text-amber-950 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100"
+              role="status"
+            >
+              <span className="font-medium">Delayed feed</span> — showing cached snapshot from{" "}
+              <time dateTime={staleFeedAt}>{new Date(staleFeedAt).toLocaleString()}</time>
+              <span className="text-muted-foreground"> (live DSE data may be slow or unavailable)</span>
+            </div>
+          )}
+
+          {/* ── Main ── */}
+          <main className="mx-auto max-w-[1600px] px-4 py-4 lg:px-6 lg:py-5">
         {/* Indices row below navbar */}
         <div className="mb-4 flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {indices.map((idx) => (
@@ -949,7 +983,6 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
           )}
         </section>
 
-        {error && <p className="mt-4 text-center text-xs text-destructive">{error}</p>}
       </main>
 
       {/* Mobile All Securities Sidebar */}
@@ -1122,6 +1155,8 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
 
       <SiteFooter />

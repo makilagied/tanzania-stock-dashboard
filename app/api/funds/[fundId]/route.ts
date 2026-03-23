@@ -19,13 +19,14 @@ export async function GET(_request: Request, context: { params: Promise<{ fundId
         { status: 200, headers: { "Cache-Control": "no-store" } },
       )
     }
-    const { data, stale, cachedAtMs } = await getCachedFundRecords(id, meta)
+    const { data, stale, cachedAtMs, outage } = await getCachedFundRecords(id, meta)
     return NextResponse.json(
       {
-        success: true,
+        success: !outage && data.length > 0,
         fundId: id,
         meta,
         data,
+        ...(outage ? { outage: true, error: "Fund data unavailable and no cached snapshot." } : {}),
         ...(stale
           ? {
               stale: true,
