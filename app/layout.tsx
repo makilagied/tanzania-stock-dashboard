@@ -1,6 +1,8 @@
 import type React from "react"
 import type { Metadata } from "next"
 import { Playfair_Display, Source_Sans_3 as Source_Sans_Pro } from "next/font/google"
+import { CalculatorModal } from "@/components/calculator-modal"
+import { MobileAppBar } from "@/components/mobile-app-bar"
 import { ThemeProvider } from "@/components/theme-provider"
 import "./globals.css"
 
@@ -91,7 +93,9 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd) }}
         />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="theme" disableTransitionOnChange>
-          {children}
+          <div className="pb-[calc(3.25rem+env(safe-area-inset-bottom,0px))] lg:pb-0">{children}</div>
+          <CalculatorModal />
+          <MobileAppBar />
         </ThemeProvider>
       </body>
     </html>

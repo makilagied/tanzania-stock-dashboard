@@ -41,6 +41,8 @@
 
   --font-sans: "Inter", system-ui, sans-serif;
   --font-heading: "Inter", system-ui, sans-serif;
+
+  color-scheme: light;
 }
 
 .dark {
@@ -77,6 +79,14 @@
   --sidebar-accent-foreground: #fafafa;
   --sidebar-border: #27272a;
   --sidebar-ring: rgba(250, 250, 250, 0.2);
+
+  color-scheme: dark;
+}
+
+/* Native selects: closed state + option list follow app palette (with color-scheme above) */
+select option {
+  background-color: var(--card);
+  color: var(--card-foreground);
 }
 
 @theme inline {
