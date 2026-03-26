@@ -6,6 +6,7 @@ import { readFile } from "fs/promises"
 import path from "path"
 import { VERTEX_FUND_DIR } from "@/lib/vertex-fund-meta"
 import type { ITrustFundRecord } from "@/lib/itrust-funds"
+import { parseFlexibleDateTs } from "@/lib/date-parse"
 
 export function getVertexCsvAbsolutePath(csvFile: string): string {
   return path.join(process.cwd(), "public", VERTEX_FUND_DIR, csvFile)
@@ -15,6 +16,25 @@ function parseCommaNumber(raw: string): number {
   const s = raw.replace(/,/g, "").trim()
   const n = Number(s)
   return Number.isFinite(n) ? n : 0
+}
+
+function parseVertexNavPerUnit(rawNav: string, rawClosing: string | null): number {
+  const nav = parseCommaNumber(rawNav)
+  const closing = rawClosing != null ? parseCommaNumber(rawClosing) : 0
+  if (!(nav > 0)) return closing > 0 ? closing : 0
+
+  // Some Vertex ETF rows contain malformed NAV strings like "3,738,010"
+  // instead of a realistic per-unit value near the closing price.
+  if (nav > 10_000) {
+    const scaled = nav / 10_000
+    if (closing > 0) {
+      const closeEnough = Math.abs(scaled - closing) / closing <= 0.35
+      if (closeEnough) return scaled
+      return closing
+    }
+    return scaled
+  }
+  return nav
 }
 
 function parseCsvLine(line: string): string[] {
@@ -42,64 +62,9 @@ function normalizeHeader(h: string): string {
   return h.toLowerCase().replace(/\(.*?\)/g, "").replace(/\s+/g, " ").trim()
 }
 
-const MONTH_MAP: Record<string, number> = {
-  jan: 0,
-  january: 0,
-  feb: 1,
-  february: 1,
-  mar: 2,
-  march: 2,
-  apr: 3,
-  april: 3,
-  may: 4,
-  jun: 5,
-  june: 5,
-  jul: 6,
-  july: 6,
-  aug: 7,
-  august: 7,
-  sep: 8,
-  sept: 8,
-  september: 8,
-  oct: 9,
-  october: 9,
-  nov: 10,
-  november: 10,
-  dec: 11,
-  december: 11,
-}
-
-/**
- * Vertex files can contain:
- * - "19 March 2026"
- * - "03/12/2026" (usually MM/DD/YYYY export)
- * - sometimes numeric with '-'
- */
 function parseVertexDate(raw: string): number {
-  const s = raw.trim()
-
-  const textMonth = /^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/.exec(s)
-  if (textMonth) {
-    const [, d, mon, y] = textMonth
-    const m = MONTH_MAP[mon.toLowerCase()]
-    if (m != null) return new Date(Number(y), m, Number(d)).getTime()
-  }
-
-  const numeric = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(s)
-  if (numeric) {
-    const [, a, b, y] = numeric
-    const p1 = Number(a)
-    const p2 = Number(b)
-    // Disambiguate where possible; fallback to MM/DD for ambiguous values.
-    const dayFirst = p1 > 12
-    const monthFirst = p2 > 12 || !dayFirst
-    const month = monthFirst ? p1 : p2
-    const day = monthFirst ? p2 : p1
-    return new Date(Number(y), month - 1, day).getTime()
-  }
-
-  const t = Date.parse(s)
-  return Number.isNaN(t) ? 0 : t
+  // Vertex exports are commonly month-first when fully numeric (e.g. 03/12/2026).
+  return parseFlexibleDateTs(raw, { preference: "month-first" })
 }
 
 export async function loadVertexFundRecords(csvFile: string, fundName: string): Promise<ITrustFundRecord[]> {
@@ -116,6 +81,7 @@ export async function loadVertexFundRecords(csvFile: string, fundName: string): 
   const header = parseCsvLine(lines[0]).map(normalizeHeader)
   const dateIdx = header.findIndex((h) => h === "date")
   const navIdx = header.findIndex((h) => h === "nav")
+  const closingIdx = header.findIndex((h) => h === "closing price")
   const navValueIdx = header.findIndex((h) => h.includes("fund net value"))
   const unitsIdx = header.findIndex((h) => h.includes("total number of units") || h.includes("total units"))
 
@@ -130,7 +96,8 @@ export async function loadVertexFundRecords(csvFile: string, fundName: string): 
     if (cells.length <= Math.max(dateIdx, navIdx, navValueIdx, unitsIdx)) continue
 
     const dateStr = cells[dateIdx]
-    const navPerUnit = parseCommaNumber(cells[navIdx])
+    const rawClosing = closingIdx >= 0 && closingIdx < cells.length ? cells[closingIdx] : null
+    const navPerUnit = parseVertexNavPerUnit(cells[navIdx], rawClosing)
     const outStandingUnits = parseCommaNumber(cells[unitsIdx])
     const netAssetValue = parseCommaNumber(cells[navValueIdx])
 

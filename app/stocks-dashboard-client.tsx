@@ -916,10 +916,11 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
                   >
                     {formatPctAnalytics(stockAnalytics.totalReturnPct)}
                   </p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">= ((end / start) - 1) * 100</p>
               </div>
                 <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Annualized return <span className="normal-case opacity-80">(approx.)</span>
+                    Time-scaled annualized return <span className="normal-case opacity-80">(approx.)</span>
                   </p>
                   <p
                     className={`mt-1 text-lg font-semibold tabular-nums ${
@@ -927,6 +928,9 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
                     }`}
                   >
                     {formatPctAnalytics(stockAnalytics.annualizedReturnPct)}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    = (((end / start) - 1) * 100) / years
                   </p>
                 </div>
                 <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
@@ -936,14 +940,18 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
                   <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
                     {formatPctAnalytics(stockAnalytics.volatilityAnnualizedPct)}
                   </p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">From daily % changes</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    = std(daily returns) * sqrt(252) * 100
+                  </p>
                 </div>
                 <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Max drawdown</p>
                   <p className="mt-1 text-lg font-semibold tabular-nums text-chart-5">
                     {stockAnalytics.maxDrawdownPct != null ? `${stockAnalytics.maxDrawdownPct.toFixed(2)}%` : "—"}
                   </p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">Largest fall from a peak in window</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    = min((value - running peak) / running peak) * 100
+                  </p>
                 </div>
                 <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Best / worst day</p>
@@ -951,6 +959,9 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
                     <span className="text-chart-3">{formatPctAnalytics(stockAnalytics.bestDayPct)}</span>
                     <span className="text-muted-foreground"> / </span>
                     <span className="text-chart-5">{formatPctAnalytics(stockAnalytics.worstDayPct)}</span>
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    = max(daily return * 100) / min(daily return * 100)
                   </p>
                 </div>
                 <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
@@ -960,6 +971,7 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
                     <span className="text-muted-foreground">/</span>{" "}
                     {stockAnalytics.periodLowClose != null ? formatPrice(stockAnalytics.periodLowClose) : "—"}
                   </p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">= max(high), min(low)</p>
                 </div>
                 <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Volume vs period avg</p>
@@ -967,8 +979,7 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
                     {formatPctAnalytics(stockAnalytics.volumeVsAvgPct)}
                   </p>
                   <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    Last {stockAnalytics.latestVolume != null ? formatCompact(stockAnalytics.latestVolume) : "—"} vs avg{" "}
-                    {stockAnalytics.avgVolume != null ? formatCompact(stockAnalytics.avgVolume) : "—"}
+                    = ((latest volume / avg volume) - 1) * 100
                   </p>
                 </div>
                 <div className="rounded-lg bg-muted/40 px-3 py-2 shadow-sm">
@@ -976,7 +987,7 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
                   <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
                     {stockAnalytics.observations}
                   </p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">Trading days in this analytics slice</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">= count(sessions in selected window)</p>
                 </div>
               </div>
             </>
