@@ -1,7 +1,7 @@
 import type { ITrustFundRecord } from "@/lib/itrust-funds"
 
 /** Period presets: chart + analytics use the same selection (includes full history). */
-export type FundAnalyticsPeriod = "1w" | "1m" | "qtd" | "mtd" | "ytd" | "all"
+export type FundAnalyticsPeriod = "1w" | "1m" | "1y" | "qtd" | "mtd" | "ytd" | "all"
 
 export type FundPeriodAnalytics = {
   period: FundAnalyticsPeriod
@@ -57,6 +57,8 @@ export function getAnalyticsWindowStart(period: FundAnalyticsPeriod, latestTs: n
       return latestTs - 7 * MS_DAY
     case "1m":
       return latestTs - 30 * MS_DAY
+    case "1y":
+      return latestTs - 365 * MS_DAY
     case "mtd":
       return startOfMonth(latestTs)
     case "qtd":
@@ -84,6 +86,7 @@ export function filterFundRowsByPeriod(
 export const ANALYTICS_PERIOD_LABELS: Record<FundAnalyticsPeriod, string> = {
   "1w": "1 week",
   "1m": "1 month",
+  "1y": "1 year",
   qtd: "Quarter (calendar)",
   mtd: "Month to date",
   ytd: "Year to date",
@@ -94,6 +97,7 @@ export const ANALYTICS_PERIOD_LABELS: Record<FundAnalyticsPeriod, string> = {
 export const ANALYTICS_PERIOD_OPTIONS: { id: FundAnalyticsPeriod; short: string }[] = [
   { id: "1w", short: "1W" },
   { id: "1m", short: "1M" },
+  { id: "1y", short: "1Y" },
   { id: "qtd", short: "Quarter" },
   { id: "mtd", short: "MTD" },
   { id: "ytd", short: "YTD" },

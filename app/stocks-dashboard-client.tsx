@@ -6,7 +6,12 @@ import { MarketDowntime } from "@/components/market-downtime"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
 import { ANALYTICS_PERIOD_OPTIONS, type FundAnalyticsPeriod } from "@/lib/fund-analytics"
-import { addMovingAverages, computeStockPeriodAnalytics, historyToAscending } from "@/lib/stock-analytics"
+import {
+  addMovingAverages,
+  buildChartSeriesForPeriod,
+  computeStockPeriodAnalytics,
+  historyToAscending,
+} from "@/lib/stock-analytics"
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import {
   ArrowDownRight,
@@ -116,7 +121,6 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
   const [indices, setIndices] = useState<ShareIndexPoint[]>([])
   const [search, setSearch] = useState("")
   const [selectedSymbol, setSelectedSymbol] = useState("CRDB")
-  const [days, setDays] = useState(90)
   const [stockPeriod, setStockPeriod] = useState<FundAnalyticsPeriod>("1m")
   const [loading, setLoading] = useState(true)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -198,11 +202,14 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
     return []
   }, [analyticsHistory, analyticsHistorySymbol, history, historySymbol, selectedSymbol])
 
-  /** Oldest → newest for Recharts (API often returns reverse order). */
+  /** Oldest → newest for Recharts, using the same period selection as analytics. */
   const chartHistory = useMemo(() => {
-    if (historySymbol !== selectedSymbol) return []
-    return historyToAscending(history).map(({ date, close, volume }) => ({ date, close, volume }))
-  }, [history, historySymbol, selectedSymbol])
+    if (analyticsHistorySymbol !== selectedSymbol) return []
+    const ascending = historyToAscending(analyticsHistory)
+    const enriched = addMovingAverages(ascending)
+    const sliced = buildChartSeriesForPeriod(enriched, stockPeriod)
+    return sliced.map(({ date, close, volume }) => ({ date, close, volume }))
+  }, [analyticsHistory, analyticsHistorySymbol, selectedSymbol, stockPeriod])
 
   const analyticsHistoryAscending = useMemo(
     () => historyToAscending(historyForStockAnalytics),
@@ -352,8 +359,19 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (selectedSymbol) void fetchHistory(selectedSymbol, days)
-  }, [selectedSymbol, days])
+    if (!selectedSymbol) return
+    const daysForPeriod: Record<FundAnalyticsPeriod, number> = {
+      "1w": 7,
+      "1m": 30,
+      "1y": 365,
+      qtd: 120,
+      mtd: 60,
+      ytd: 365,
+      all: 365 * 5,
+    }
+    const rangeDays = daysForPeriod[stockPeriod] ?? 90
+    void fetchHistory(selectedSymbol, rangeDays)
+  }, [selectedSymbol, stockPeriod])
 
   useEffect(() => {
     if (!selectedSymbol) return
@@ -503,24 +521,24 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
                 </Button>
                 </div>
                 <div className="flex flex-wrap gap-1 sm:justify-end lg:justify-end lg:shrink-0">
-                  {[30, 90, 180, 365].map((d) => (
+                  {ANALYTICS_PERIOD_OPTIONS.map(({ id, short }) => (
                     <button
-                      key={d}
+                      key={id}
                       type="button"
-                      onClick={() => setDays(d)}
+                      onClick={() => setStockPeriod(id)}
                       className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                        days === d
+                        stockPeriod === id
                           ? "bg-primary text-primary-foreground"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground"
                       }`}
                     >
-                      {d}D
+                      {short}
                     </button>
                   ))}
-              </div>
+                </div>
             </div>
               <div className="h-[220px] p-3 lg:h-auto lg:min-h-0 lg:flex-1">
-                {historyLoading ? (
+                {historyLoading || analyticsHistoryLoading ? (
                   <div className="flex h-full flex-col items-center justify-center gap-3 px-4">
                     <div
                       className="h-9 w-9 animate-spin rounded-full border-2 border-muted border-t-chart-3"
@@ -530,7 +548,7 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
                     <p className="text-center text-xs font-medium text-muted-foreground">Loading price history…</p>
                   </div>
                 ) : chartHistory.length > 0 ? (
-                  <div className="h-full w-full min-h-[180px]" key={`${selectedSymbol}-${days}`}>
+                  <div className="h-full w-full min-h-[180px]" key={`${selectedSymbol}-${stockPeriod}`}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={chartHistory} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                         <defs>
