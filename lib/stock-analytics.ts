@@ -219,10 +219,7 @@ export function computeStockPeriodAnalytics(
   const years = daysSpan / 365.25
   let annualizedReturnPct: number | null = null
   if (totalReturnPct != null && c0 > 0 && years > 0) {
-    const factor = c1 / c0
-    if (factor > 0) {
-      annualizedReturnPct = (Math.pow(factor, 1 / years) - 1) * 100
-    }
+    annualizedReturnPct = totalReturnPct / years
   }
 
   const dailyReturns: number[] = []
