@@ -5,9 +5,22 @@ import { CalculatorPanel } from "@/components/investment-calculator"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Calculator, Coffee } from "lucide-react"
 
+const MOBILE_MAX_WIDTH = 1023
+
 export function CalculatorModal() {
   const [open, setOpen] = useState(false)
   const [isFooterVisible, setIsFooterVisible] = useState(false)
+  const [isMobileLayout, setIsMobileLayout] = useState(false)
+  /** On small screens, cycle FAB to coffee promo when footer is not in view */
+  const [mobileCoffeePromo, setMobileCoffeePromo] = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_MAX_WIDTH}px)`)
+    const sync = () => setIsMobileLayout(mq.matches)
+    sync()
+    mq.addEventListener("change", sync)
+    return () => mq.removeEventListener("change", sync)
+  }, [])
 
   useEffect(() => {
     const footer = document.getElementById("site-footer")
@@ -23,8 +36,39 @@ export function CalculatorModal() {
     return () => observer.disconnect()
   }, [])
 
+  useEffect(() => {
+    if (!isMobileLayout || isFooterVisible) {
+      setMobileCoffeePromo(false)
+      return
+    }
+    let cancelled = false
+    let timeoutId: ReturnType<typeof setTimeout>
+    const calculatorMs = 10_000
+    const coffeeMs = 5_000
+
+    const cycle = () => {
+      setMobileCoffeePromo(false)
+      timeoutId = setTimeout(() => {
+        if (cancelled) return
+        setMobileCoffeePromo(true)
+        timeoutId = setTimeout(() => {
+          if (cancelled) return
+          cycle()
+        }, coffeeMs)
+      }, calculatorMs)
+    }
+
+    cycle()
+    return () => {
+      cancelled = true
+      clearTimeout(timeoutId)
+    }
+  }, [isMobileLayout, isFooterVisible])
+
+  const showCoffeeFab = isFooterVisible || mobileCoffeePromo
+
   const onFabClick = () => {
-    if (isFooterVisible) {
+    if (showCoffeeFab) {
       window.open("https://snippe.me/pay/makilagied", "_blank", "noopener,noreferrer")
       return
     }
@@ -36,16 +80,19 @@ export function CalculatorModal() {
       <button
         type="button"
         onClick={onFabClick}
-        className={`fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] right-4 z-[70] flex items-center justify-center rounded-full border border-border bg-card text-primary shadow-md transition-all hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background lg:bottom-8 lg:right-8 print:hidden ${
-          isFooterVisible ? "h-12 gap-2 px-4" : "h-14 w-14"
+        className={`fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] right-4 z-[70] flex items-center justify-center overflow-hidden rounded-full border border-border bg-card text-primary shadow-md transition-[width,height,padding,gap,transform] duration-500 ease-out hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-[0.97] lg:bottom-8 lg:right-8 print:hidden ${
+          showCoffeeFab ? "h-12 max-w-[min(calc(100vw-2rem),280px)] gap-2 px-4" : "h-14 w-14 max-w-14 gap-0 px-0"
         }`}
-        aria-label={isFooterVisible ? "Buy me a coffee" : "Open investment calculator"}
-        title={isFooterVisible ? "Buy me a coffee" : "Investment calculator"}
+        aria-label={showCoffeeFab ? "Buy me a coffee" : "Open investment calculator"}
+        title={showCoffeeFab ? "Buy me a coffee" : "Investment calculator"}
+        aria-live="polite"
       >
-        {isFooterVisible ? (
+        {showCoffeeFab ? (
           <>
-            <Coffee className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
-            <span className="whitespace-nowrap text-xs font-semibold">Buy me a coffee</span>
+            <Coffee className="h-5 w-5 shrink-0 animate-in fade-in zoom-in-95 duration-300" strokeWidth={2} aria-hidden />
+            <span className="whitespace-nowrap text-xs font-semibold animate-in fade-in slide-in-from-right-2 duration-300">
+              Buy me a coffee
+            </span>
           </>
         ) : (
           <Calculator className="h-6 w-6 shrink-0" strokeWidth={2} aria-hidden />
