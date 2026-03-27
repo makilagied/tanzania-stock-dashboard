@@ -3,9 +3,9 @@ import { SeoIntroStocks } from "@/components/seo-intro"
 import HomePage from "./stocks-dashboard-client"
 
 export const metadata: Metadata = {
-  title: "DSE stocks & live market data",
+  title: "Tanzania Stocks & Funds Dashboard · Uwekezaji Online",
   description:
-    "Soko la hisa Tanzania (DSE): bei za moja kwa moja, faharasa ya soko, hisa zilizopanda na kushuka, na undani wa soko — Uwekezaji Online. English: live DSE prices, indices, top movers, charts, and market depth.",
+    "Tanzania stocks and funds in one place: live DSE market prices, indices, and charts plus mutual funds and ETFs (UTT, iTrust, Inuka, Faida, Vertex, ZAN) with NAV history and analytics.",
   alternates: { canonical: "/" },
   keywords: [
     "uwekezaji",
@@ -29,17 +29,17 @@ export const metadata: Metadata = {
     "Faida",
   ],
   openGraph: {
-    title: "DSE stocks & live market data · Uwekezaji Online",
+    title: "Tanzania Stocks & Funds Dashboard · Uwekezaji Online",
     description:
-      "Soko la hisa Tanzania (DSE): bei za moja kwa moja, faharasa, hisa zilizopanda na kushuka. Live prices, indices, movers, charts.",
+      "Live DSE stocks, indices, and charts plus mutual funds and ETFs with NAV history and analytics in one dashboard.",
     url: "/",
     locale: "en_TZ",
     alternateLocale: ["sw_TZ"],
   },
   twitter: {
-    title: "DSE stocks & live market data · Uwekezaji Online",
+    title: "Tanzania Stocks & Funds Dashboard · Uwekezaji Online",
     description:
-      "Soko la hisa Tanzania — bei za moja kwa moja, faharasa na chati. Live DSE data.",
+      "Track Tanzania stocks and funds together: DSE market data plus NAV and fund analytics.",
   },
 }
 
