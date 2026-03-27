@@ -47,11 +47,11 @@ const siteJsonLd = {
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.uwekezaji.online"),
   title: {
-    default: "Investors Dashboard · Uwekezaji Online",
+    default: "Tanzania Stocks & Funds Dashboard · Uwekezaji Online",
     template: "%s · Uwekezaji Online",
   },
   description:
-    "Uwekezaji Online — soko la hisa Tanzania (DSE), mifuko ya uwekezaji (UTT, iTrust, Inuka, Faida na zaidi), bei za moja kwa moja, faharasa na chati.",
+    "Tanzania stocks and funds in one place: live DSE market prices, indices, and charts plus mutual funds and ETFs (UTT, iTrust, Inuka, Faida, Vertex, ZAN) with NAV history and analytics.",
   generator: "makilagied",
   robots: {
     index: true,
@@ -76,10 +76,16 @@ export const metadata: Metadata = {
     locale: "en_TZ",
     alternateLocale: ["sw_TZ"],
     siteName: "Uwekezaji Online",
+    title: "Tanzania Stocks & Funds Dashboard · Uwekezaji Online",
+    description:
+      "Live DSE stocks, indices, and charts plus mutual funds and ETFs with NAV history and analytics in one dashboard.",
     images: [{ url: "/logo-uwekezaji.png", alt: "Investors Dashboard — Uwekezaji Online" }],
   },
   twitter: {
     card: "summary_large_image",
+    title: "Tanzania Stocks & Funds Dashboard · Uwekezaji Online",
+    description:
+      "Track Tanzania stocks and funds together: DSE market data plus NAV and fund analytics.",
     images: ["/logo-uwekezaji.png"],
   },
 }

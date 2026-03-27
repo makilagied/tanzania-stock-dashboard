@@ -2,9 +2,9 @@ import type { Metadata } from "next"
 import type { ReactNode } from "react"
 
 export const metadata: Metadata = {
-  title: "Mutual funds & ETFs — NAV history",
+  title: "Tanzania Stocks & Funds Dashboard · Uwekezaji Online",
   description:
-    "Mifuko ya uwekezaji Tanzania: UTT, iTrust, Inuka, Faida, Vertex, ZAN — historia ya NAV, chati, na mapato ya kipindi. English: mutual funds, ETFs, and index funds — NAV history on Uwekezaji Online.",
+    "Tanzania stocks and funds in one place: live DSE market prices, indices, and charts plus mutual funds and ETFs (UTT, iTrust, Inuka, Faida, Vertex, ZAN) with NAV history and analytics.",
   alternates: { canonical: "/funds" },
   keywords: [
     "uwekezaji",
@@ -28,17 +28,17 @@ export const metadata: Metadata = {
     "Tanzania unit trusts",
   ],
   openGraph: {
-    title: "Mutual funds & ETFs — Uwekezaji Online",
+    title: "Tanzania Stocks & Funds Dashboard · Uwekezaji Online",
     description:
-      "Mifuko ya uwekezaji: UTT, iTrust, Inuka, Faida na zaidi — NAV na chati. Tanzania mutual funds & ETFs.",
+      "Live DSE stocks, indices, and charts plus mutual funds and ETFs with NAV history and analytics in one dashboard.",
     url: "/funds",
     locale: "en_TZ",
     alternateLocale: ["sw_TZ"],
   },
   twitter: {
-    title: "Mutual funds & ETFs — Uwekezaji Online",
+    title: "Tanzania Stocks & Funds Dashboard · Uwekezaji Online",
     description:
-      "UTT, iTrust, Inuka, Faida — mifuko ya uwekezaji na NAV. Tanzania fund analytics.",
+      "Track Tanzania stocks and funds together: DSE market data plus NAV and fund analytics.",
   },
 }
 
