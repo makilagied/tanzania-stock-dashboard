@@ -1,9 +1,10 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import { ChevronDown, Moon, RefreshCw, Sun, TrendingUp } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import dynamic from "next/dynamic"
+import type { ApexOptions } from "apexcharts"
+import { ChevronDown, Maximize2, Minimize2, Moon, RefreshCw, Sun, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
@@ -17,6 +18,8 @@ import type { ITrustFundRecord } from "@/lib/itrust-funds"
 import { ALL_FUNDS, type FundMeta } from "@/lib/funds-catalog"
 import { parseFlexibleDateTs } from "@/lib/date-parse"
 import { cn } from "@/lib/utils"
+
+const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false })
 
 type ApiFundResponse = {
   success: boolean
@@ -413,29 +416,6 @@ function inferFundProfile(meta: FundMeta | null): {
   }
 }
 
-const FundTooltip = ({
-  active,
-  payload,
-  currency,
-}: {
-  active?: boolean
-  payload?: Array<{ payload: ChartRow }>
-  currency: "TZS" | "USD"
-}) => {
-  if (!active || !payload?.length) return null
-  const row = payload[0].payload
-  return (
-    <div className="rounded-lg bg-card px-3 py-2 text-xs shadow-lg ring-1 ring-black/5 dark:ring-white/10">
-      <p className="font-medium">{row.date}</p>
-      <p className="text-muted-foreground">NAV / unit: {formatMoney(row.navPerUnit, currency)}</p>
-      <p className="text-muted-foreground">Sale: {formatMoney(row.salePricePerUnit, currency)}</p>
-      <p className="text-muted-foreground">Repurchase: {formatMoney(row.repurchasePricePerUnit, currency)}</p>
-      <p className="text-muted-foreground">Total NAV: {formatCompact(row.netAssetValue)}</p>
-      <p className="text-muted-foreground">Units: {formatCompact(row.outStandingUnits)}</p>
-    </div>
-  )
-}
-
 type ChartRow = ITrustFundRecord & { label: string; labelTs: number }
 
 const formatDateTick = (ts: number) => {
@@ -457,11 +437,13 @@ export default function FundsPageClient({ seoIntro }: { seoIntro?: ReactNode }) 
   /** One period for both NAV chart and performance analytics */
   const [fundPeriod, setFundPeriod] = useState<FundAnalyticsPeriod>("1m")
   const [isDarkMode, setIsDarkMode] = useState(false)
+  const [chartFullscreen, setChartFullscreen] = useState(false)
   const [openSidebarPanel, setOpenSidebarPanel] = useState<"snapshot" | "profile" | null>(null)
   /** Accordion: only one fund group expanded at a time */
   const [activeFundGroup, setActiveFundGroup] = useState<
     "itrustMutual" | "itrustEtf" | "utt" | "faida" | "inuka" | "vertex" | "zan" | null
   >("itrustMutual")
+  const chartContainerRef = useRef<HTMLElement | null>(null)
 
   /** Derived flags (keeps `openFundGroups` in scope for any stale chunk / HMR) */
   const openFundGroups = {
@@ -524,6 +506,16 @@ export default function FundsPageClient({ seoIntro }: { seoIntro?: ReactNode }) 
     document.documentElement.classList.toggle("dark")
   }
 
+  const toggleChartFullscreen = async () => {
+    const host = chartContainerRef.current
+    if (!host) return
+    if (document.fullscreenElement === host) {
+      await document.exitFullscreen()
+      return
+    }
+    await host.requestFullscreen()
+  }
+
   const rowsAscending = useMemo(() => {
     const parseDateSort = (dateRaw: string) => {
       // Keep sorting resilient even when upstream/cached `dateSort` was built with mixed locale parsing.
@@ -565,6 +557,94 @@ export default function FundsPageClient({ seoIntro }: { seoIntro?: ReactNode }) 
     latest && previous && previous.navPerUnit > 0
       ? ((latest.navPerUnit - previous.navPerUnit) / previous.navPerUnit) * 100
       : null
+
+  const apexFundSeries = useMemo(
+    () => [
+      {
+        name: meta?.label ?? latest?.fundName ?? selectedId,
+        data: chartData.map((row) => ({
+          x: row.labelTs,
+          y: row.navPerUnit,
+        })),
+      },
+    ],
+    [chartData, latest?.fundName, meta?.label, selectedId],
+  )
+
+  const apexFundOptions = useMemo<ApexOptions>(
+    () => ({
+      chart: {
+        id: `fund-nav-${selectedId}`,
+        type: "area",
+        stacked: false,
+        background: "transparent",
+        zoom: {
+          type: "x",
+          enabled: true,
+          autoScaleYaxis: true,
+        },
+        toolbar: {
+          autoSelected: "zoom",
+          tools: { download: false },
+        },
+        animations: { enabled: false },
+      },
+      dataLabels: { enabled: false },
+      markers: { size: 0 },
+      stroke: { curve: "smooth", width: 2.5, colors: [isDarkMode ? "#10b981" : "#059669"] },
+      fill: {
+        type: "gradient",
+        gradient: {
+          shadeIntensity: 1,
+          inverseColors: false,
+          opacityFrom: 0.5,
+          opacityTo: 0,
+          stops: [0, 90, 100],
+        },
+      },
+      grid: { borderColor: "rgba(148, 163, 184, 0.22)", strokeDashArray: 3 },
+      xaxis: {
+        type: "datetime",
+        labels: {
+          datetimeUTC: false,
+          formatter: (_value, timestamp) => formatDateTick(Number(timestamp)),
+        },
+      },
+      yaxis: {
+        title: { text: "Price" },
+        labels: {
+          formatter: (val) => formatCompact(Number(val)),
+        },
+      },
+      tooltip: {
+        custom: ({ dataPointIndex }) => {
+          const row = chartData[dataPointIndex]
+          if (!row) return ""
+          return `
+            <div style="padding:8px 10px;font-size:12px;line-height:1.45;">
+              <div style="font-weight:600;margin-bottom:4px;">${row.date}</div>
+              <div>NAV / unit: ${formatMoney(row.navPerUnit, currency)}</div>
+              <div>Sale: ${formatMoney(row.salePricePerUnit, currency)}</div>
+              <div>Repurchase: ${formatMoney(row.repurchasePricePerUnit, currency)}</div>
+              <div>Total NAV: ${formatCompact(row.netAssetValue)}</div>
+              <div>Units: ${formatCompact(row.outStandingUnits)}</div>
+            </div>
+          `
+        },
+      },
+      theme: { mode: isDarkMode ? "dark" : "light" },
+    }),
+    [chartData, currency, isDarkMode, selectedId],
+  )
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      const current = document.fullscreenElement
+      setChartFullscreen(Boolean(current && chartContainerRef.current && current === chartContainerRef.current))
+    }
+    document.addEventListener("fullscreenchange", onFullscreenChange)
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange)
+  }, [])
 
   const itrustMutual = ALL_FUNDS.filter((f) => f.provider === "itrust" && f.category === "mutual-fund")
   const itrustEtfs = ALL_FUNDS.filter((f) => f.provider === "itrust" && f.category === "etf")
@@ -870,7 +950,12 @@ export default function FundsPageClient({ seoIntro }: { seoIntro?: ReactNode }) 
         )}
 
         <div className="grid gap-4 lg:grid-cols-3">
-          <section className="rounded-xl bg-card p-4 shadow-md lg:col-span-2">
+          <section
+            ref={chartContainerRef}
+            className={`flex flex-col rounded-xl bg-card p-4 shadow-md lg:col-span-2 ${
+              chartFullscreen ? "fixed inset-0 z-[120] h-screen w-screen rounded-none border-0 p-3 sm:p-4" : ""
+            }`}
+          >
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2 className="text-lg font-semibold">{meta?.label ?? latest?.fundName ?? selectedId}</h2>
@@ -897,6 +982,16 @@ export default function FundsPageClient({ seoIntro }: { seoIntro?: ReactNode }) 
                 )}
               </div>
               <div className="flex flex-wrap gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-[10px]"
+                  onClick={toggleChartFullscreen}
+                  title={chartFullscreen ? "Exit fullscreen" : "Fullscreen chart"}
+                >
+                  {chartFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                  {chartFullscreen ? "Exit" : "Full"}
+                </Button>
                 {ANALYTICS_PERIOD_OPTIONS.map(({ id, short }) => (
                   <Button
                     key={id}
@@ -910,53 +1005,13 @@ export default function FundsPageClient({ seoIntro }: { seoIntro?: ReactNode }) 
                 ))}
               </div>
             </div>
-            <div className="h-[280px] w-full lg:h-[320px]">
+            <div className={`w-full ${chartFullscreen ? "min-h-0 flex-1" : "h-[280px] lg:h-[320px]"}`}>
               {loading ? (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading chart…</div>
               ) : chartData.length === 0 ? (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No history</div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="fundChartGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.18} />
-                        <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis
-                      dataKey="labelTs"
-                      type="number"
-                      domain={["dataMin", "dataMax"]}
-                      tick={{ fontSize: 9 }}
-                      axisLine={false}
-                      tickLine={false}
-                      dy={6}
-                      minTickGap={16}
-                      tickFormatter={(v) => formatDateTick(Number(v))}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 9 }}
-                      axisLine={false}
-                      tickLine={false}
-                      domain={["auto", "auto"]}
-                      tickFormatter={(v) => formatCompact(Number(v))}
-                      dx={-4}
-                      width={48}
-                    />
-                    <Tooltip content={<FundTooltip currency={currency} />} />
-                    <Area
-                      type="monotone"
-                      dataKey="navPerUnit"
-                      name="NAV / unit"
-                      stroke={isDarkMode ? "#10b981" : "#059669"}
-                      fill="url(#fundChartGrad)"
-                      strokeWidth={2.5}
-                      dot={false}
-                      isAnimationActive
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                <ReactApexChart options={apexFundOptions} series={apexFundSeries} type="area" height="100%" />
               )}
             </div>
           </section>

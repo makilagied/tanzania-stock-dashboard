@@ -2,13 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { CalculatorPanel } from "@/components/investment-calculator"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Calculator, Coffee } from "lucide-react"
 
 export function CalculatorModal() {
@@ -59,15 +53,24 @@ export function CalculatorModal() {
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[min(90vh,720px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
-          <DialogHeader className="shrink-0 border-b border-border bg-muted/20 px-4 py-3 pr-12 sm:px-5">
-            <DialogTitle>Investment calculator</DialogTitle>
-            {/* <DialogDescription>
-              NAV-based fund returns, DSE stock backtests, and compound projections — educational only.
-            </DialogDescription> */}
-          </DialogHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
-            <CalculatorPanel enabled={open} />
+        <DialogContent className="overflow-visible border-none bg-transparent p-0 shadow-none sm:max-w-xl">
+          <div className="relative">
+            <div className="pointer-events-none absolute -inset-1 rounded-3xl bg-gradient-to-r from-emerald-500/20 via-transparent to-primary/20 opacity-80 blur-xl" />
+            <div className="relative flex max-h-[min(90vh,720px)] flex-col overflow-hidden rounded-3xl border border-border/50 bg-card/90 shadow-2xl backdrop-blur-xl">
+              <DialogHeader className="shrink-0 border-b border-border/50 bg-muted/30 px-4 py-3 pr-12 sm:px-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-1.5">
+                    <div className="h-3 w-3 rounded-full bg-rose-500/80" />
+                    <div className="h-3 w-3 rounded-full bg-amber-500/80" />
+                    <div className="h-3 w-3 rounded-full bg-emerald-500/80" />
+                  </div>
+                  <DialogTitle className="text-sm font-semibold sm:text-base">Investment calculator</DialogTitle>
+                </div>
+              </DialogHeader>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
+                <CalculatorPanel enabled={open} />
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

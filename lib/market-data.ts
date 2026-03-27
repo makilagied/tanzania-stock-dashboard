@@ -14,6 +14,8 @@ export interface StockData {
 
 export interface HistoricalPoint {
   date: string
+  /** Session open when the source provides OHLC (e.g. DSE). */
+  open?: number
   close: number
   volume: number
   /** Session high when the source provides OHLC (e.g. DSE). */
@@ -184,6 +186,14 @@ const normalizeHistoryPayload = (data: any): HistoricalPoint[] => {
           : []
   return arrayPayload
     .map((item: any) => {
+      const openRaw = toNumber(
+        item.opening_price ??
+          item.open_price ??
+          item.openingPrice ??
+          item.openPrice ??
+          item.open ??
+          item.start_price,
+      )
       const close = toNumber(
         item.closing_price ??
           item.close_price ??
@@ -210,6 +220,7 @@ const normalizeHistoryPayload = (data: any): HistoricalPoint[] => {
         close,
         volume: toNumber(item.volume ?? item.total_volume ?? item.totalVolume),
       }
+      if (openRaw > 0) point.open = openRaw
       if (highRaw > 0) point.high = highRaw
       if (lowRaw > 0) point.low = lowRaw
       return point
