@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
+import dynamic from "next/dynamic"
 import { MarketDowntime } from "@/components/market-downtime"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
@@ -12,12 +13,14 @@ import {
   computeStockPeriodAnalytics,
   historyToAscending,
 } from "@/lib/stock-analytics"
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import type { ApexOptions } from "apexcharts"
 import {
   ArrowDownRight,
   ArrowUpRight,
   LineChart,
   List,
+  Maximize2,
+  Minimize2,
   Moon,
   RefreshCw,
   Search,
@@ -28,6 +31,8 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+
+const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false })
 
 type StockData = {
   id: string
@@ -42,6 +47,7 @@ type StockData = {
 
 type HistoryPoint = {
   date: string
+  open?: number
   close: number
   volume: number
   high?: number
@@ -74,11 +80,6 @@ type OrderBook = {
   orders: StockOrder[]
 }
 
-type ChartTooltipProps = {
-  active?: boolean
-  payload?: Array<{ payload: HistoryPoint }>
-}
-
 const formatPrice = (value: number) =>
   new Intl.NumberFormat("en-TZ", { style: "currency", currency: "TZS", maximumFractionDigits: 0 }).format(value)
 
@@ -91,17 +92,6 @@ const formatCount = (value: number) => new Intl.NumberFormat("en-TZ").format(val
 
 /** Analytics history window; DSE caps usable range (~4000 days) — see `DSE_HISTORY_MAX_DAYS` in market-data. */
 const STOCK_ANALYTICS_MAX_DAYS = 4000
-
-const HistoryTooltip = ({ active, payload }: ChartTooltipProps) => {
-  if (!active || !payload || payload.length === 0) return null
-  const point = payload[0].payload
-  return (
-    <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-lg">
-      <p className="font-medium">{point.date}</p>
-      <p className="text-muted-foreground">Close: {formatPrice(point.close)}</p>
-    </div>
-  )
-}
 
 const formatPctAnalytics = (value: number | null, digits = 2) => {
   if (value == null || Number.isNaN(value)) return "—"
@@ -122,6 +112,8 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
   const [search, setSearch] = useState("")
   const [selectedSymbol, setSelectedSymbol] = useState("CRDB")
   const [stockPeriod, setStockPeriod] = useState<FundAnalyticsPeriod>("1m")
+  const [chartType, setChartType] = useState<"line" | "candlestick">("candlestick")
+  const [chartFullscreen, setChartFullscreen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [analyticsHistoryLoading, setAnalyticsHistoryLoading] = useState(false)
@@ -142,6 +134,7 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
   const [sortKey, setSortKey] = useState<"symbol" | "price" | "change" | "volume">("volume")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
   const stockAnalyticsSectionRef = useRef<HTMLElement | null>(null)
+  const chartContainerRef = useRef<HTMLElement | null>(null)
   /** Latest selected ticker — used to ignore stale history responses after switching symbol. */
   const selectedSymbolRef = useRef(selectedSymbol)
   selectedSymbolRef.current = selectedSymbol
@@ -208,8 +201,186 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
     const ascending = historyToAscending(analyticsHistory)
     const enriched = addMovingAverages(ascending)
     const sliced = buildChartSeriesForPeriod(enriched, stockPeriod)
-    return sliced.map(({ date, close, volume }) => ({ date, close, volume }))
+    return sliced.map(({ date, open, close, volume, high, low }, index) => {
+      const prevClose = index > 0 ? sliced[index - 1]?.close ?? close : close
+      const candleOpen = open ?? prevClose
+      const candleHigh = high ?? Math.max(candleOpen, close)
+      const candleLow = low ?? Math.min(candleOpen, close)
+      const wickBase = candleLow
+      const wickSize = Math.max(0, candleHigh - candleLow)
+      const bodyBase = Math.min(candleOpen, close)
+      const bodySize = Math.abs(close - candleOpen)
+      return {
+        date,
+        close,
+        open: candleOpen,
+        high: candleHigh,
+        low: candleLow,
+        volume,
+        wickBase,
+        wickSize,
+        bodyBase,
+        bodySize,
+        bullish: close >= candleOpen,
+      }
+    })
   }, [analyticsHistory, analyticsHistorySymbol, selectedSymbol, stockPeriod])
+
+  const apexCandleSeries = useMemo(
+    () => [
+      {
+        data: chartHistory.map((point) => ({
+          x: new Date(`${point.date}T00:00:00Z`).getTime(),
+          y: [point.open ?? point.close, point.high ?? point.close, point.low ?? point.close, point.close],
+        })),
+      },
+    ],
+    [chartHistory],
+  )
+
+  const apexCandleOptions = useMemo<ApexOptions>(
+    () => ({
+      chart: {
+        id: `stock-candles-${selectedSymbol}`,
+        type: "candlestick",
+        background: "transparent",
+        toolbar: {
+          show: true,
+          tools: {
+            download: false,
+            selection: true,
+            zoom: true,
+            zoomin: true,
+            zoomout: true,
+            pan: true,
+            reset: true,
+          },
+        },
+        zoom: { enabled: true, type: "x", autoScaleYaxis: true },
+        animations: { enabled: false },
+      },
+      theme: { mode: isDarkMode ? "dark" : "light" },
+      grid: { borderColor: "rgba(148, 163, 184, 0.22)", strokeDashArray: 3 },
+      xaxis: {
+        type: "datetime",
+        labels: { datetimeUTC: false },
+      },
+      yaxis: {
+        tooltip: { enabled: true },
+        labels: {
+          formatter: (value) => formatCompact(Number(value)),
+        },
+      },
+      plotOptions: {
+        candlestick: {
+          colors: {
+            upward: "#00c853",
+            downward: "#ff1744",
+          },
+          wick: {
+            useFillColor: false,
+          },
+        },
+      },
+      stroke: {
+        colors: ["#1f2937"],
+      },
+      tooltip: {
+        custom: ({ dataPointIndex }) => {
+          const point = chartHistory[dataPointIndex]
+          if (!point) return ""
+          return `
+            <div style="padding:8px 10px;font-size:12px;line-height:1.45;">
+              <div style="font-weight:600;margin-bottom:4px;">${point.date}</div>
+              <div>Open: ${formatPrice(point.open ?? point.close)}</div>
+              <div>High: ${formatPrice(point.high ?? point.close)}</div>
+              <div>Low: ${formatPrice(point.low ?? point.close)}</div>
+              <div>Close: ${formatPrice(point.close)}</div>
+            </div>
+          `
+        },
+      },
+    }),
+    [chartHistory, isDarkMode, selectedSymbol],
+  )
+
+  const apexLineSeries = useMemo(
+    () => [
+      {
+        name: selectedStock?.symbol ?? selectedSymbol,
+        data: chartHistory.map((point) => ({
+          x: new Date(`${point.date}T00:00:00Z`).getTime(),
+          y: point.close,
+        })),
+      },
+    ],
+    [chartHistory, selectedStock?.symbol, selectedSymbol],
+  )
+
+  const apexLineOptions = useMemo<ApexOptions>(
+    () => ({
+      chart: {
+        id: `stock-line-${selectedSymbol}`,
+        type: "area",
+        stacked: false,
+        background: "transparent",
+        zoom: {
+          type: "x",
+          enabled: true,
+          autoScaleYaxis: true,
+        },
+        toolbar: {
+          autoSelected: "zoom",
+          tools: {
+            download: false,
+          },
+        },
+        animations: { enabled: false },
+      },
+      dataLabels: { enabled: false },
+      markers: { size: 0 },
+      stroke: { curve: "smooth", width: 2.2, colors: ["#00c853"] },
+      fill: {
+        type: "gradient",
+        gradient: {
+          shadeIntensity: 1,
+          inverseColors: false,
+          opacityFrom: 0.5,
+          opacityTo: 0,
+          stops: [0, 90, 100],
+        },
+      },
+      grid: { borderColor: "rgba(148, 163, 184, 0.22)", strokeDashArray: 3 },
+      xaxis: {
+        type: "datetime",
+        labels: { datetimeUTC: false },
+      },
+      yaxis: {
+        title: { text: "Price" },
+        labels: {
+          formatter: (val) => formatCompact(Number(val)),
+        },
+      },
+      tooltip: {
+        shared: false,
+        x: { format: "dd MMM yyyy" },
+        y: {
+          formatter: (val) => formatPrice(Number(val)),
+        },
+      },
+      theme: { mode: isDarkMode ? "dark" : "light" },
+    }),
+    [isDarkMode, selectedSymbol],
+  )
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      const current = document.fullscreenElement
+      setChartFullscreen(Boolean(current && chartContainerRef.current && current === chartContainerRef.current))
+    }
+    document.addEventListener("fullscreenchange", onFullscreenChange)
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange)
+  }, [])
 
   const analyticsHistoryAscending = useMemo(
     () => historyToAscending(historyForStockAnalytics),
@@ -227,6 +398,16 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
   const toggleDarkMode = () => {
     setIsDarkMode((prev) => !prev)
     document.documentElement.classList.toggle("dark")
+  }
+
+  const toggleChartFullscreen = async () => {
+    const host = chartContainerRef.current
+    if (!host) return
+    if (document.fullscreenElement === host) {
+      await document.exitFullscreen()
+      return
+    }
+    await host.requestFullscreen()
   }
 
   const fetchStocks = async () => {
@@ -469,7 +650,12 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
           <div className="flex flex-col gap-4 lg:h-[650px]">
 
             {/* Chart */}
-            <section className="flex h-[280px] min-h-0 flex-col rounded-xl bg-card shadow-md lg:h-auto lg:flex-1">
+            <section
+              ref={chartContainerRef}
+              className={`flex min-h-0 flex-col rounded-xl bg-card shadow-md lg:h-auto lg:flex-1 ${
+                chartFullscreen ? "fixed inset-2 z-[120] h-auto rounded-2xl border border-border/60 p-2" : "h-[280px]"
+              }`}
+            >
               {/* Two rows on &lt;lg so the list icon stays flush right; one row on lg+ (icon hidden) */}
               <div className="flex flex-col gap-2 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex w-full min-w-0 items-start justify-between gap-3 lg:min-w-0 lg:flex-1 lg:items-center">
@@ -521,6 +707,39 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
                 </Button>
                 </div>
                 <div className="flex flex-wrap gap-1 sm:justify-end lg:justify-end lg:shrink-0">
+                  <button
+                    type="button"
+                    onClick={toggleChartFullscreen}
+                    className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/30 px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    title={chartFullscreen ? "Exit fullscreen" : "Fullscreen chart"}
+                  >
+                    {chartFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                    {chartFullscreen ? "Exit" : "Full"}
+                  </button>
+                  <div className="mr-1 inline-flex rounded-md border border-border/60 bg-muted/30 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setChartType("line")}
+                      className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                        chartType === "line"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Line
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChartType("candlestick")}
+                      className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                        chartType === "candlestick"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Candles
+                    </button>
+                  </div>
                   {ANALYTICS_PERIOD_OPTIONS.map(({ id, short }) => (
                     <button
                       key={id}
@@ -548,37 +767,17 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
                     <p className="text-center text-xs font-medium text-muted-foreground">Loading price history…</p>
                   </div>
                 ) : chartHistory.length > 0 ? (
-                  <div className="h-full w-full min-h-[180px]" key={`${selectedSymbol}-${stockPeriod}`}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={chartHistory} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id={`stockChartFill-${selectedSymbol}`} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="var(--chart-3)" stopOpacity={0.35} />
-                            <stop offset="100%" stopColor="var(--chart-3)" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <XAxis dataKey="date" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} dy={6} />
-                        <YAxis
-                          tick={{ fontSize: 9 }}
-                          axisLine={false}
-                          tickLine={false}
-                          tickFormatter={(v) => formatCompact(Number(v))}
-                          dx={-4}
-                          width={48}
-                          domain={["auto", "auto"]}
-                        />
-                        <Tooltip content={<HistoryTooltip />} />
-                        <Area
-                          type="monotone"
-                          dataKey="close"
-                          stroke="var(--chart-3)"
-                          fill={`url(#stockChartFill-${selectedSymbol})`}
-                          strokeWidth={2.5}
-                          dot={false}
-                          isAnimationActive={true}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
+                  <div className="h-full w-full min-h-[180px]" key={`${selectedSymbol}-${stockPeriod}-${chartType}`}>
+                    {chartType === "candlestick" ? (
+                      <ReactApexChart
+                        options={apexCandleOptions}
+                        series={apexCandleSeries}
+                        type="candlestick"
+                        height="100%"
+                      />
+                    ) : (
+                      <ReactApexChart options={apexLineOptions} series={apexLineSeries} type="area" height="100%" />
+                    )}
                   </div>
                 ) : (
                   <div className="flex h-full items-center justify-center text-xs text-muted-foreground">

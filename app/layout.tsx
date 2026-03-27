@@ -88,6 +88,9 @@ export const metadata: Metadata = {
       "Track Tanzania stocks and funds together: DSE market data plus NAV and fund analytics.",
     images: ["/logo-uwekezaji.png"],
   },
+  verification: {
+    google: "google61c6b96b65b4c6dc",
+  },
 }
 
 export default function RootLayout({
