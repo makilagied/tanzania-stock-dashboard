@@ -3,7 +3,7 @@ import Link from "next/link"
 
 export function SiteFooter() {
   return (
-    <footer className="mt-8 border-t border-border/50 bg-background/50 p-4 backdrop-blur-sm">
+    <footer id="site-footer" className="mt-8 border-t border-border/50 bg-background/50 p-4 backdrop-blur-sm">
       <div className="mx-auto flex max-w-[1600px] flex-col items-center justify-between gap-4 text-center sm:flex-row sm:text-left">
         <Link
           href="https://www.uwekezaji.online"
