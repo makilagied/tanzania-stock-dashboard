@@ -631,10 +631,7 @@ export default function ComparePageClient() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <SiteHeader
-        title="Uwekezaji Online"
-        subtitle="Compare stocks and funds side by side"
-      >
+      <SiteHeader title="Uwekezaji Online" subtitle="Compare stocks and funds side by side">
         <Button
           type="button"
           variant="outline"
@@ -658,88 +655,78 @@ export default function ComparePageClient() {
         </Button>
       </SiteHeader>
 
-      <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-6 lg:px-6">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <GitCompareArrows className="h-5 w-5" aria-hidden />
-            </div>
-            <div>
-              <h1 className="font-serif text-2xl font-semibold tracking-tight sm:text-3xl">Compare</h1>
-              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                Put any two instruments next to each other: listed DSE stocks or mutual funds/ETFs from the catalog.
-                Metrics use the same date window as elsewhere on the site; the chart rebases each series to 100 at the
-                start of the selected period so different price levels are comparable.
-              </p>
-            </div>
+      <main className="mx-auto w-full max-w-[1400px] flex-1 px-3 py-4 sm:px-6 sm:py-6">
+
+        {/* Page header */}
+        <div className="mb-5 flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <GitCompareArrows className="h-4.5 w-4.5" aria-hidden />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Compare</h1>
+            <p className="text-xs text-muted-foreground">
+              Compare any two DSE stocks or funds side by side. Chart rebases both series to 100 at the start of the selected period.
+            </p>
           </div>
         </div>
 
-        <details className="group mb-6 rounded-xl border border-border/80 bg-muted/20 shadow-sm open:bg-muted/30">
-          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold text-foreground outline-offset-2 marker:hidden [&::-webkit-details-marker]:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
-            <ChevronDown
-              className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
-              aria-hidden
-            />
-            Methodology
-          </summary>
-          <div className="space-y-3 border-t border-border/60 px-4 pb-4 pt-3 text-sm leading-relaxed text-muted-foreground">
-            <p>
-              Each side is calculated on its own: we do not blend two instruments into one model. For a period such as
-              &quot;1 year&quot;, the window is counted backward from that instrument&apos;s{" "}
-              <strong className="font-medium text-foreground">latest available date</strong> (last session for a stock,
-              last published NAV for a fund). If those dates differ, the calendar span is not identical on both sides.
-            </p>
-            <p>
-              <strong className="font-medium text-foreground">Indexed chart:</strong> within the period you pick, the
-              first point is set to 100. Stocks use daily <strong className="font-medium text-foreground">closing
-              prices</strong>; funds use <strong className="font-medium text-foreground">NAV per unit</strong>. The
-              lines show relative change from the start of that window, not raw price levels. Dates on each line follow
-              that instrument&apos;s own series.
-            </p>
-            <p>
-              <strong className="font-medium text-foreground">Performance table:</strong>{" "}
-              <em className="not-italic">Total return</em> is the percentage change from the first to the last
-              observation in the window. <em className="not-italic">Annualized return</em> spreads that same total
-              return over the length of the window in years (a simple average pace, not compound &quot;CAGR&quot;).{" "}
-              <em className="not-italic">Volatility</em> summarizes how much day-to-day percentage moves varied, then
-              scales that to a rough yearly figure using about 252 trading days. <em className="not-italic">Max
-              drawdown</em> is the largest peak-to-trough drop over the window. <em className="not-italic">Best /
-              worst day</em> are the largest single-day up and down moves in that window.
-            </p>
-            <p>
-              <strong className="font-medium text-foreground">Stocks vs funds:</strong> metrics use the same ideas, but
-              stocks and unit trusts/ETFs are different products (liquidity, fees, risk). These numbers are descriptive
-              only and are not investment advice.
-            </p>
-          </div>
-        </details>
-
-        {stocksError ? (
+        {stocksError && (
           <p className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
             {stocksError}
           </p>
-        ) : null}
+        )}
 
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <span className="text-xs font-medium text-muted-foreground">Period</span>
-          <div className="flex flex-wrap gap-1">
-            {ANALYTICS_PERIOD_OPTIONS.map((o) => (
-              <Button
-                key={o.id}
-                type="button"
-                size="sm"
-                variant={period === o.id ? "default" : "outline"}
-                className="h-8 min-w-[2.5rem] px-2 text-xs"
-                onClick={() => setPeriod(o.id)}
-              >
-                {o.short}
-              </Button>
-            ))}
+        {/* Instrument pickers + period controls in one compact row */}
+        <div className="mb-4 rounded-xl border border-border/70 bg-card/40 shadow-sm">
+          {/* Period bar */}
+          <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2">
+            <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Period</span>
+            <div className="flex flex-wrap gap-1">
+              {ANALYTICS_PERIOD_OPTIONS.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => setPeriod(o.id)}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    period === o.id
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  {o.short}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Instrument A vs B */}
+          <div className="grid gap-0 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border/50">
+            {/* Left badge */}
+            <div className="flex items-center gap-2 px-3 py-2">
+              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">A</span>
+              <span className="truncate text-sm font-semibold">{leftTitle}</span>
+              <span className={cn("ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                leftKind === "stock" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-violet-500/10 text-violet-600 dark:text-violet-400"
+              )}>
+                {leftKind === "stock" ? "Stock" : "Fund"}
+              </span>
+            </div>
+            {/* Right badge */}
+            <div className="flex items-center gap-2 px-3 py-2">
+              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-[10px] font-bold text-blue-600 dark:text-blue-400">B</span>
+              <span className="truncate text-sm font-semibold">{rightTitle}</span>
+              <span className={cn("ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                rightKind === "stock" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-violet-500/10 text-violet-600 dark:text-violet-400"
+              )}>
+                {rightKind === "stock" ? "Stock" : "Fund"}
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="mb-6 grid gap-4 lg:grid-cols-2">
+        {/* Side pickers */}
+        <div className="mb-5 grid gap-3 sm:grid-cols-2">
           <SidePicker
             label="Instrument A"
             kind={leftKind}
@@ -772,7 +759,48 @@ export default function ComparePageClient() {
           />
         </div>
 
-        <div className="mb-6 flex flex-wrap gap-1 border-b border-border/60 pb-3">
+        {/* Errors */}
+        {(leftError || rightError) && (
+          <div className="mb-4 grid gap-2 sm:grid-cols-2">
+            {leftError ? (
+              <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                <span className="font-semibold">A:</span> {leftError}
+              </p>
+            ) : <div />}
+            {rightError ? (
+              <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                <span className="font-semibold">B:</span> {rightError}
+              </p>
+            ) : null}
+          </div>
+        )}
+
+        {/* Chart */}
+        <section className="mb-5 rounded-xl border border-border/70 bg-card/30 shadow-sm">
+          <div className="flex items-center justify-between border-b border-border/50 px-4 py-2.5">
+            <div>
+              <h2 className="text-sm font-semibold">Indexed performance <span className="text-muted-foreground font-normal">({period.toUpperCase()})</span></h2>
+              <p className="text-[11px] text-muted-foreground">Both lines start at 100. Stocks = closing price; funds = NAV per unit.</p>
+            </div>
+            {busy && <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+          </div>
+          <div className="p-3">
+            {busy && chartSeries.length === 0 ? (
+              <div className="flex h-52 items-center justify-center text-sm text-muted-foreground">Loading series…</div>
+            ) : chartSeries.length < 2 ? (
+              <div className="flex h-52 items-center justify-center text-sm text-muted-foreground">
+                Select two instruments with history to see the chart.
+              </div>
+            ) : (
+              <div className="w-full">
+                <ReactApexChart options={apexOptions} series={chartSeries} type="line" height={300} />
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Perspective tabs */}
+        <div className="mb-4 flex gap-1 border-b border-border/60 pb-0">
           {(
             [
               ["performance", "Performance"],
@@ -780,93 +808,58 @@ export default function ComparePageClient() {
               ["context", "Context"],
             ] as const
           ).map(([id, lab]) => (
-            <Button
+            <button
               key={id}
               type="button"
-              size="sm"
-              variant={perspective === id ? "secondary" : "ghost"}
-              className="h-8 text-xs"
               onClick={() => setPerspective(id)}
+              className={cn(
+                "rounded-t-md border-b-2 px-4 py-2 text-xs font-semibold transition-colors -mb-px",
+                perspective === id
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
             >
               {lab}
-            </Button>
+            </button>
           ))}
         </div>
 
-        {(leftError || rightError) && (
-          <div className="mb-4 space-y-1 text-sm">
-            {leftError ? (
-              <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-amber-800 dark:text-amber-200">
-                A: {leftError}
-              </p>
-            ) : null}
-            {rightError ? (
-              <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-amber-800 dark:text-amber-200">
-                B: {rightError}
-              </p>
-            ) : null}
-          </div>
-        )}
-
-        <section className="mb-8 rounded-xl border border-border/80 bg-card/30 p-4 shadow-sm">
-          <h2 className="mb-1 font-semibold">Indexed performance ({period.toUpperCase()})</h2>
-          <p className="mb-4 text-xs text-muted-foreground">
-            Each line starts at 100 on the first date in the window. Stocks use closing prices; funds use NAV per unit.
-          </p>
-          {busy && chartSeries.length === 0 ? (
-            <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">Loading series…</div>
-          ) : chartSeries.length < 2 ? (
-            <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-              Select two instruments with history to see the chart.
-            </div>
-          ) : (
-            <div className="min-h-[280px] w-full">
-              <ReactApexChart options={apexOptions} series={chartSeries} type="line" height={320} />
-            </div>
-          )}
-        </section>
-
+        {/* Performance table */}
         {perspective === "performance" && (
-          <section className="mb-8 overflow-x-auto rounded-xl border border-border/80 bg-card/30 shadow-sm">
-            <table className="w-full min-w-[520px] border-collapse text-sm">
+          <section className="mb-5 overflow-x-auto rounded-xl border border-border/70 bg-card/30 shadow-sm">
+            <table className="w-full min-w-[480px] border-collapse text-sm">
               <thead>
-                <tr className="border-b border-border bg-muted/40 text-left">
-                  <th className="px-3 py-2.5 font-semibold">Metric</th>
-                  <th className="px-3 py-2.5 font-semibold">{leftTitle}</th>
-                  <th className="px-3 py-2.5 font-semibold">{rightTitle}</th>
+                <tr className="border-b border-border/70 bg-muted/30">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Metric</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
+                      {leftTitle}
+                    </span>
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-block h-2 w-2 rounded-full bg-blue-500"></span>
+                      {rightTitle}
+                    </span>
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/60">
+              <tbody className="divide-y divide-border/40">
                 <MetricRow
                   label="Total return"
                   a={leftKind === "stock" ? leftStockAnalytics?.totalReturnPct : leftFundAnalytics?.totalReturnPct}
                   b={rightKind === "stock" ? rightStockAnalytics?.totalReturnPct : rightFundAnalytics?.totalReturnPct}
                 />
                 <MetricRow
-                  label="Annualized return (simple)"
-                  a={
-                    leftKind === "stock"
-                      ? leftStockAnalytics?.annualizedReturnPct
-                      : leftFundAnalytics?.annualizedReturnPct
-                  }
-                  b={
-                    rightKind === "stock"
-                      ? rightStockAnalytics?.annualizedReturnPct
-                      : rightFundAnalytics?.annualizedReturnPct
-                  }
+                  label="Annualized return"
+                  a={leftKind === "stock" ? leftStockAnalytics?.annualizedReturnPct : leftFundAnalytics?.annualizedReturnPct}
+                  b={rightKind === "stock" ? rightStockAnalytics?.annualizedReturnPct : rightFundAnalytics?.annualizedReturnPct}
                 />
                 <MetricRow
-                  label="Volatility (ann., sample)"
-                  a={
-                    leftKind === "stock"
-                      ? leftStockAnalytics?.volatilityAnnualizedPct
-                      : leftFundAnalytics?.volatilityAnnualizedPct
-                  }
-                  b={
-                    rightKind === "stock"
-                      ? rightStockAnalytics?.volatilityAnnualizedPct
-                      : rightFundAnalytics?.volatilityAnnualizedPct
-                  }
+                  label="Volatility (ann.)"
+                  a={leftKind === "stock" ? leftStockAnalytics?.volatilityAnnualizedPct : leftFundAnalytics?.volatilityAnnualizedPct}
+                  b={rightKind === "stock" ? rightStockAnalytics?.volatilityAnnualizedPct : rightFundAnalytics?.volatilityAnnualizedPct}
                 />
                 <MetricRow
                   label="Max drawdown"
@@ -884,18 +877,14 @@ export default function ComparePageClient() {
                   b={rightKind === "stock" ? rightStockAnalytics?.worstDayPct : rightFundAnalytics?.worstDayPct}
                 />
                 <tr className="bg-muted/20">
-                  <td className="px-3 py-2 text-muted-foreground" colSpan={3}>
-                    Observations in window:{" "}
+                  <td className="px-4 py-2 text-xs text-muted-foreground" colSpan={3}>
+                    Observations:{" "}
                     <strong className="text-foreground">
-                      {leftKind === "stock"
-                        ? (leftStockAnalytics?.observations ?? "—")
-                        : (leftFundAnalytics?.observations ?? "—")}
-                    </strong>{" "}
-                    vs{" "}
+                      {leftKind === "stock" ? (leftStockAnalytics?.observations ?? "—") : (leftFundAnalytics?.observations ?? "—")}
+                    </strong>
+                    {" vs "}
                     <strong className="text-foreground">
-                      {rightKind === "stock"
-                        ? (rightStockAnalytics?.observations ?? "—")
-                        : (rightFundAnalytics?.observations ?? "—")}
+                      {rightKind === "stock" ? (rightStockAnalytics?.observations ?? "—") : (rightFundAnalytics?.observations ?? "—")}
                     </strong>
                   </td>
                 </tr>
@@ -904,194 +893,154 @@ export default function ComparePageClient() {
           </section>
         )}
 
+        {/* Snapshot table */}
         {perspective === "snapshot" && (
-          <section className="mb-8 overflow-x-auto rounded-xl border border-border/80 bg-card/30 shadow-sm">
-            <table className="w-full min-w-[520px] border-collapse text-sm">
+          <section className="mb-5 overflow-x-auto rounded-xl border border-border/70 bg-card/30 shadow-sm">
+            <table className="w-full min-w-[480px] border-collapse text-sm">
               <thead>
-                <tr className="border-b border-border bg-muted/40 text-left">
-                  <th className="px-3 py-2.5 font-semibold">Field</th>
-                  <th className="px-3 py-2.5 font-semibold">{leftTitle}</th>
-                  <th className="px-3 py-2.5 font-semibold">{rightTitle}</th>
+                <tr className="border-b border-border/70 bg-muted/30">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Field</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
+                      {leftTitle}
+                    </span>
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-block h-2 w-2 rounded-full bg-blue-500"></span>
+                      {rightTitle}
+                    </span>
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/60">
-                <tr>
-                  <td className="px-3 py-2 text-muted-foreground">Type</td>
-                  <td className="px-3 py-2">{leftKind === "stock" ? "Listed stock (DSE)" : "Fund / ETF"}</td>
-                  <td className="px-3 py-2">{rightKind === "stock" ? "Listed stock (DSE)" : "Fund / ETF"}</td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 text-muted-foreground">Latest level</td>
-                  <td className="px-3 py-2">
-                    {leftKind === "stock"
-                      ? leftStockLive
-                        ? formatPriceTzs(leftStockLive.price)
-                        : "—"
+              <tbody className="divide-y divide-border/40">
+                {[
+                  {
+                    label: "Type",
+                    left: leftKind === "stock" ? "Listed stock (DSE)" : "Fund / ETF",
+                    right: rightKind === "stock" ? "Listed stock (DSE)" : "Fund / ETF",
+                  },
+                  {
+                    label: "Latest level",
+                    left: leftKind === "stock"
+                      ? leftStockLive ? formatPriceTzs(leftStockLive.price) : "—"
                       : leftFundAsc.length > 0 && leftFundMeta
-                        ? formatFundMoney(
-                            leftFundAsc[leftFundAsc.length - 1].navPerUnit,
-                            leftFundMeta.currency,
-                          )
-                        : "—"}
-                  </td>
-                  <td className="px-3 py-2">
-                    {rightKind === "stock"
-                      ? rightStockLive
-                        ? formatPriceTzs(rightStockLive.price)
-                        : "—"
+                        ? formatFundMoney(leftFundAsc[leftFundAsc.length - 1].navPerUnit, leftFundMeta.currency)
+                        : "—",
+                    right: rightKind === "stock"
+                      ? rightStockLive ? formatPriceTzs(rightStockLive.price) : "—"
                       : rightFundAsc.length > 0 && rightFundMeta
-                        ? formatFundMoney(
-                            rightFundAsc[rightFundAsc.length - 1].navPerUnit,
-                            rightFundMeta.currency,
-                          )
-                        : "—"}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 text-muted-foreground">Session / latest change</td>
-                  <td className="px-3 py-2">
-                    {leftKind === "stock"
-                      ? leftStockLive
-                        ? formatPct(leftStockLive.changePercent)
-                        : "—"
-                      : leftFundAnalytics?.totalReturnPct != null
-                        ? `Window: ${formatPct(leftFundAnalytics.totalReturnPct)}`
-                        : "—"}
-                  </td>
-                  <td className="px-3 py-2">
-                    {rightKind === "stock"
-                      ? rightStockLive
-                        ? formatPct(rightStockLive.changePercent)
-                        : "—"
-                      : rightFundAnalytics?.totalReturnPct != null
-                        ? `Window: ${formatPct(rightFundAnalytics.totalReturnPct)}`
-                        : "—"}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 text-muted-foreground">Market cap (live)</td>
-                  <td className="px-3 py-2">
-                    {leftKind === "stock" && leftStockLive?.marketCap != null
-                      ? formatCompact(leftStockLive.marketCap)
-                      : "—"}
-                  </td>
-                  <td className="px-3 py-2">
-                    {rightKind === "stock" && rightStockLive?.marketCap != null
-                      ? formatCompact(rightStockLive.marketCap)
-                      : "—"}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 text-muted-foreground">Spread vs NAV (funds)</td>
-                  <td className="px-3 py-2">
-                    {leftKind === "fund" ? formatPct(leftFundAnalytics?.latestSpreadPct) : "—"}
-                  </td>
-                  <td className="px-3 py-2">
-                    {rightKind === "fund" ? formatPct(rightFundAnalytics?.latestSpreadPct) : "—"}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 text-muted-foreground">Bid / ask (live)</td>
-                  <td className="px-3 py-2">
-                    {leftKind === "stock" && leftStockLive?.bestBidPrice != null && leftStockLive?.bestOfferPrice != null
+                        ? formatFundMoney(rightFundAsc[rightFundAsc.length - 1].navPerUnit, rightFundMeta.currency)
+                        : "—",
+                  },
+                  {
+                    label: "Session change",
+                    left: leftKind === "stock"
+                      ? leftStockLive ? formatPct(leftStockLive.changePercent) : "—"
+                      : leftFundAnalytics?.totalReturnPct != null ? `Window: ${formatPct(leftFundAnalytics.totalReturnPct)}` : "—",
+                    right: rightKind === "stock"
+                      ? rightStockLive ? formatPct(rightStockLive.changePercent) : "—"
+                      : rightFundAnalytics?.totalReturnPct != null ? `Window: ${formatPct(rightFundAnalytics.totalReturnPct)}` : "—",
+                  },
+                  {
+                    label: "Market cap",
+                    left: leftKind === "stock" && leftStockLive?.marketCap != null ? formatCompact(leftStockLive.marketCap) : "—",
+                    right: rightKind === "stock" && rightStockLive?.marketCap != null ? formatCompact(rightStockLive.marketCap) : "—",
+                  },
+                  {
+                    label: "Spread vs NAV",
+                    left: leftKind === "fund" ? formatPct(leftFundAnalytics?.latestSpreadPct) : "—",
+                    right: rightKind === "fund" ? formatPct(rightFundAnalytics?.latestSpreadPct) : "—",
+                  },
+                  {
+                    label: "Bid / Ask",
+                    left: leftKind === "stock" && leftStockLive?.bestBidPrice != null && leftStockLive?.bestOfferPrice != null
                       ? `${formatPriceTzs(leftStockLive.bestBidPrice)} / ${formatPriceTzs(leftStockLive.bestOfferPrice)}`
-                      : "—"}
-                  </td>
-                  <td className="px-3 py-2">
-                    {rightKind === "stock" &&
-                    rightStockLive?.bestBidPrice != null &&
-                    rightStockLive?.bestOfferPrice != null
+                      : "—",
+                    right: rightKind === "stock" && rightStockLive?.bestBidPrice != null && rightStockLive?.bestOfferPrice != null
                       ? `${formatPriceTzs(rightStockLive.bestBidPrice)} / ${formatPriceTzs(rightStockLive.bestOfferPrice)}`
-                      : "—"}
-                  </td>
-                </tr>
+                      : "—",
+                  },
+                ].map(({ label, left, right }) => (
+                  <tr key={label} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{label}</td>
+                    <td className="px-4 py-2.5 text-right text-xs font-medium tabular-nums">{left}</td>
+                    <td className="px-4 py-2.5 text-right text-xs font-medium tabular-nums">{right}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </section>
         )}
 
+        {/* Context table */}
         {perspective === "context" && (
-          <section className="mb-8 overflow-x-auto rounded-xl border border-border/80 bg-card/30 shadow-sm">
-            <table className="w-full min-w-[520px] border-collapse text-sm">
+          <section className="mb-5 overflow-x-auto rounded-xl border border-border/70 bg-card/30 shadow-sm">
+            <table className="w-full min-w-[480px] border-collapse text-sm">
               <thead>
-                <tr className="border-b border-border bg-muted/40 text-left">
-                  <th className="px-3 py-2.5 font-semibold">Detail</th>
-                  <th className="px-3 py-2.5 font-semibold">{leftTitle}</th>
-                  <th className="px-3 py-2.5 font-semibold">{rightTitle}</th>
+                <tr className="border-b border-border/70 bg-muted/30">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Detail</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
+                      {leftTitle}
+                    </span>
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-block h-2 w-2 rounded-full bg-blue-500"></span>
+                      {rightTitle}
+                    </span>
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/60">
-                <tr>
-                  <td className="px-3 py-2 text-muted-foreground">Name</td>
-                  <td className="px-3 py-2">
-                    {leftKind === "stock"
-                      ? (leftStockLive?.name ?? leftStock)
-                      : (leftFundMeta?.label ?? leftFund)}
+              <tbody className="divide-y divide-border/40">
+                {[
+                  {
+                    label: "Name",
+                    left: leftKind === "stock" ? (leftStockLive?.name ?? leftStock) : (leftFundMeta?.label ?? leftFund),
+                    right: rightKind === "stock" ? (rightStockLive?.name ?? rightStock) : (rightFundMeta?.label ?? rightFund),
+                  },
+                  {
+                    label: "Provider / Venue",
+                    left: leftKind === "stock" ? "Dar es Salaam Stock Exchange" : leftFundMeta ? fundProviderLabel(leftFundMeta) : "—",
+                    right: rightKind === "stock" ? "Dar es Salaam Stock Exchange" : rightFundMeta ? fundProviderLabel(rightFundMeta) : "—",
+                  },
+                  {
+                    label: "Category",
+                    left: leftKind === "stock" ? "Equity (listed)" : (leftFundMeta?.category ?? "—"),
+                    right: rightKind === "stock" ? "Equity (listed)" : (rightFundMeta?.category ?? "—"),
+                  },
+                  {
+                    label: "Currency",
+                    left: leftKind === "stock" ? "TZS" : (leftFundMeta?.currency ?? "—"),
+                    right: rightKind === "stock" ? "TZS" : (rightFundMeta?.currency ?? "—"),
+                  },
+                  {
+                    label: "Avg volume (window)",
+                    left: leftKind === "stock" && leftStockAnalytics?.avgVolume != null ? formatCompact(leftStockAnalytics.avgVolume) : "—",
+                    right: rightKind === "stock" && rightStockAnalytics?.avgVolume != null ? formatCompact(rightStockAnalytics.avgVolume) : "—",
+                  },
+                  {
+                    label: "Volume vs average",
+                    left: leftKind === "stock" ? formatPct(leftStockAnalytics?.volumeVsAvgPct) : "—",
+                    right: rightKind === "stock" ? formatPct(rightStockAnalytics?.volumeVsAvgPct) : "—",
+                  },
+                ].map(({ label, left, right }) => (
+                  <tr key={label} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{label}</td>
+                    <td className="px-4 py-2.5 text-right text-xs font-medium">{left}</td>
+                    <td className="px-4 py-2.5 text-right text-xs font-medium">{right}</td>
+                  </tr>
+                ))}
+                <tr className="hover:bg-muted/20 transition-colors">
+                  <td className="px-4 py-2.5 align-top text-xs text-muted-foreground">MA Trend</td>
+                  <td className="px-4 py-2.5 text-right align-top text-xs leading-relaxed">
+                    {leftKind === "stock" ? leftStockAnalytics?.maTrendNote ?? "—" : "N/A (fund)"}
                   </td>
-                  <td className="px-3 py-2">
-                    {rightKind === "stock"
-                      ? (rightStockLive?.name ?? rightStock)
-                      : (rightFundMeta?.label ?? rightFund)}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 text-muted-foreground">Provider / venue</td>
-                  <td className="px-3 py-2">
-                    {leftKind === "stock"
-                      ? "Dar es Salaam Stock Exchange"
-                      : leftFundMeta
-                        ? fundProviderLabel(leftFundMeta)
-                        : "—"}
-                  </td>
-                  <td className="px-3 py-2">
-                    {rightKind === "stock"
-                      ? "Dar es Salaam Stock Exchange"
-                      : rightFundMeta
-                        ? fundProviderLabel(rightFundMeta)
-                        : "—"}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 text-muted-foreground">Category</td>
-                  <td className="px-3 py-2">{leftKind === "stock" ? "Equity (listed)" : (leftFundMeta?.category ?? "—")}</td>
-                  <td className="px-3 py-2">
-                    {rightKind === "stock" ? "Equity (listed)" : (rightFundMeta?.category ?? "—")}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 text-muted-foreground">Currency</td>
-                  <td className="px-3 py-2">{leftKind === "stock" ? "TZS (price)" : (leftFundMeta?.currency ?? "—")}</td>
-                  <td className="px-3 py-2">{rightKind === "stock" ? "TZS (price)" : (rightFundMeta?.currency ?? "—")}</td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 text-muted-foreground">Volume (avg in window)</td>
-                  <td className="px-3 py-2">
-                    {leftKind === "stock" && leftStockAnalytics?.avgVolume != null
-                      ? formatCompact(leftStockAnalytics.avgVolume)
-                      : "—"}
-                  </td>
-                  <td className="px-3 py-2">
-                    {rightKind === "stock" && rightStockAnalytics?.avgVolume != null
-                      ? formatCompact(rightStockAnalytics.avgVolume)
-                      : "—"}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 text-muted-foreground">Volume vs average</td>
-                  <td className="px-3 py-2">
-                    {leftKind === "stock" ? formatPct(leftStockAnalytics?.volumeVsAvgPct) : "—"}
-                  </td>
-                  <td className="px-3 py-2">
-                    {rightKind === "stock" ? formatPct(rightStockAnalytics?.volumeVsAvgPct) : "—"}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 align-top text-muted-foreground">Trend (moving averages)</td>
-                  <td className="px-3 py-2 align-top text-xs leading-relaxed">
-                    {leftKind === "stock" ? leftStockAnalytics?.maTrendNote ?? "—" : "Funds use NAV series; MA trend is not shown here."}
-                  </td>
-                  <td className="px-3 py-2 align-top text-xs leading-relaxed">
-                    {rightKind === "stock" ? rightStockAnalytics?.maTrendNote ?? "—" : "Funds use NAV series; MA trend is not shown here."}
+                  <td className="px-4 py-2.5 text-right align-top text-xs leading-relaxed">
+                    {rightKind === "stock" ? rightStockAnalytics?.maTrendNote ?? "—" : "N/A (fund)"}
                   </td>
                 </tr>
               </tbody>
@@ -1099,10 +1048,24 @@ export default function ComparePageClient() {
           </section>
         )}
 
-        <p className="mb-8 text-xs leading-relaxed text-muted-foreground">
-          Analytics are descriptive, not advice. Stock metrics use DSE history (~{STOCK_HISTORY_DAYS} days max); fund NAV
-          comes from each provider&apos;s published series. Cross-type comparisons mix different instruments and
-          liquidity rules—use them as a starting point for your own research.
+        {/* Methodology collapsible */}
+        <details className="group mb-5 rounded-xl border border-border/70 bg-muted/10 shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-semibold text-muted-foreground outline-none marker:hidden [&::-webkit-details-marker]:hidden hover:text-foreground transition-colors">
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-open:rotate-180" aria-hidden />
+            How these metrics work
+          </summary>
+          <div className="grid gap-3 border-t border-border/50 px-4 pb-4 pt-3 text-xs leading-relaxed text-muted-foreground sm:grid-cols-2">
+            <p><strong className="text-foreground">Indexed chart:</strong> each series is rebased to 100 at the first data point in the selected window. Stocks use closing prices; funds use NAV per unit.</p>
+            <p><strong className="text-foreground">Total return:</strong> percentage change from first to last observation in the window.</p>
+            <p><strong className="text-foreground">Annualized return:</strong> total return spread over the window length in years (simple average, not CAGR).</p>
+            <p><strong className="text-foreground">Volatility:</strong> annualized standard deviation of daily % moves (~252 trading days).</p>
+            <p><strong className="text-foreground">Max drawdown:</strong> largest peak-to-trough drop over the window.</p>
+            <p><strong className="text-foreground">Note:</strong> metrics are descriptive only, not investment advice. Stocks and funds are different products with different liquidity and risk profiles.</p>
+          </div>
+        </details>
+
+        <p className="mb-6 text-[11px] leading-relaxed text-muted-foreground">
+          Analytics are descriptive, not advice. Stock metrics use DSE history (~{STOCK_HISTORY_DAYS} days max); fund NAV comes from each provider&apos;s published series.
         </p>
       </main>
 
@@ -1120,11 +1083,34 @@ function MetricRow({
   a: number | null | undefined
   b: number | null | undefined
 }) {
+  const aVal = a ?? null
+  const bVal = b ?? null
+  const aStr = formatPct(aVal)
+  const bStr = formatPct(bVal)
+  const aPositive = aVal != null && aVal > 0
+  const bPositive = bVal != null && bVal > 0
+  const aNegative = aVal != null && aVal < 0
+  const bNegative = bVal != null && bVal < 0
+
   return (
-    <tr>
-      <td className="px-3 py-2 text-muted-foreground">{label}</td>
-      <td className="px-3 py-2 font-medium tabular-nums">{formatPct(a ?? null)}</td>
-      <td className="px-3 py-2 font-medium tabular-nums">{formatPct(b ?? null)}</td>
+    <tr className="hover:bg-muted/20 transition-colors">
+      <td className="px-4 py-2.5 text-xs text-muted-foreground">{label}</td>
+      <td className={cn(
+        "px-4 py-2.5 text-right text-xs font-semibold tabular-nums",
+        aPositive && "text-emerald-600 dark:text-emerald-400",
+        aNegative && "text-red-600 dark:text-red-400",
+        !aPositive && !aNegative && "text-foreground",
+      )}>
+        {aStr}
+      </td>
+      <td className={cn(
+        "px-4 py-2.5 text-right text-xs font-semibold tabular-nums",
+        bPositive && "text-emerald-600 dark:text-emerald-400",
+        bNegative && "text-red-600 dark:text-red-400",
+        !bPositive && !bNegative && "text-foreground",
+      )}>
+        {bStr}
+      </td>
     </tr>
   )
 }
