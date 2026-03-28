@@ -8,7 +8,13 @@ import { getCachedGainersLosers } from "@/lib/market-data-cached"
 
 export async function GET() {
   try {
-    const { data: payload, stale, cachedAtMs } = await getCachedGainersLosers()
+    const { data: payload, stale, cachedAtMs, outage } = await getCachedGainersLosers()
+    if (outage) {
+      return NextResponse.json(
+        { success: false, data: [], error: "Gainers/losers unavailable and no cached snapshot.", outage: true },
+        { status: 200, headers: { "Cache-Control": "no-store" } },
+      )
+    }
     return NextResponse.json(
       {
         success: payload.success,

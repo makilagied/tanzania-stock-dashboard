@@ -7,6 +7,7 @@ import { readFile } from "fs/promises"
 import path from "path"
 import { FAIDA_CSV_FILENAME, FAIDA_FUND_DIR } from "@/lib/faida-fund-meta"
 import type { ITrustFundRecord } from "@/lib/itrust-funds"
+import { parseFlexibleDateTs } from "@/lib/date-parse"
 
 export function getFaidaCsvAbsolutePath(): string {
   return path.join(process.cwd(), "public", FAIDA_FUND_DIR, FAIDA_CSV_FILENAME)
@@ -40,8 +41,7 @@ function parseCsvLine(line: string): string[] {
 }
 
 function parseIsoDateToSort(raw: string): number {
-  const t = Date.parse(raw)
-  return Number.isNaN(t) ? 0 : t
+  return parseFlexibleDateTs(raw, { preference: "day-first" })
 }
 
 export async function loadFaidaFundRecords(): Promise<ITrustFundRecord[]> {

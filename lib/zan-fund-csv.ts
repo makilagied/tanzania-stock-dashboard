@@ -6,6 +6,7 @@ import { readFile } from "fs/promises"
 import path from "path"
 import { ZAN_FUND_DIR } from "@/lib/zan-fund-meta"
 import type { ITrustFundRecord } from "@/lib/itrust-funds"
+import { parseFlexibleDateTs } from "@/lib/date-parse"
 
 export function getZanCsvAbsolutePath(csvFile: string): string {
   return path.join(process.cwd(), "public", ZAN_FUND_DIR, csvFile)
@@ -43,8 +44,7 @@ function normalizeHeader(h: string): string {
 }
 
 function parseDate(raw: string): number {
-  const t = Date.parse(raw.trim())
-  return Number.isNaN(t) ? 0 : t
+  return parseFlexibleDateTs(raw, { preference: "day-first" })
 }
 
 export async function loadZanFundRecords(csvFile: string, fundName: string): Promise<ITrustFundRecord[]> {

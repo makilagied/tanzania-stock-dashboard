@@ -4,6 +4,7 @@
  */
 
 import type { ITrustFundMeta, ITrustFundRecord } from "@/lib/itrust-funds"
+import { parseFlexibleDateTs } from "@/lib/date-parse"
 
 const UTT_ORIGIN = "https://uttamis.co.tz"
 const UTT_HOME = `${UTT_ORIGIN}/`
@@ -103,14 +104,9 @@ function parseCommaNumber(v: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
-/** Parse `19-03-2026` (DD-MM-YYYY) */
+/** Parse UTT dates, preferring DD-MM-YYYY / DD/MM/YYYY to avoid locale ambiguity. */
 export function parseUttDate(raw: string): number {
-  const t = Date.parse(raw)
-  if (!Number.isNaN(t)) return t
-  const m = /^(\d{1,2})-(\d{1,2})-(\d{4})$/.exec(raw.trim())
-  if (!m) return 0
-  const [, d, mo, y] = m
-  return new Date(Number(y), Number(mo) - 1, Number(d)).getTime()
+  return parseFlexibleDateTs(raw, { preference: "day-first" })
 }
 
 function normalizeUttRow(row: UttNavRow): ITrustFundRecord {

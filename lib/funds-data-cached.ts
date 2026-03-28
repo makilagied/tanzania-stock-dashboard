@@ -14,6 +14,7 @@ export function getCachedFundRecords(
     key: `funds:records:${fundId}`,
     fetch: () => loadFundRecords(meta),
     isHealthy: rowsHealthy,
+    emptyValue: [],
   })
 }
 
@@ -22,5 +23,6 @@ export function getCachedFaidaNavRecords(): Promise<StaleFetchResult<ITrustFundR
     key: "funds:faida-nav-csv",
     fetch: () => loadFaidaFundRecords(),
     isHealthy: rowsHealthy,
+    emptyValue: [],
   })
 }
