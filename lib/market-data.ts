@@ -1,3 +1,5 @@
+import { historyDateToIsoDate } from "@/lib/history-date"
+
 export interface StockData {
   id: string
   symbol: string
@@ -68,6 +70,140 @@ const DSE_MOVERS_URL = "https://dse.co.tz/get/gainers/losers"
 const DSE_TOP_MOVERS_URL = "https://dse.co.tz/get/movers"
 
 const SAMPLE_SYMBOLS = ["CRDB", "NMB", "VODA", "TCC", "SWIS", "DSE", "MBP", "DCB"]
+
+/**
+ * History OHLCV numbers: thousands commas, optional European style (1.234,56).
+ */
+const toNumberHistory = (value: unknown): number => {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string") {
+    let s = value.trim().replace(/\s/g, "")
+    if (s === "") return 0
+    // European: dot thousands + comma decimals → 1234.56
+    if (/^\d{1,3}(\.\d{3})*,\d+$/.test(s)) {
+      s = s.replace(/\./g, "").replace(",", ".")
+    } else {
+      s = s.replace(/,/g, "")
+    }
+    const parsed = Number(s)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return 0
+}
+
+/** Prefer split-adjusted closes when the feed provides them; then official session close; avoid mistaking IDs/other fields for price. */
+const HISTORY_ADJUSTED_CLOSE_KEYS = [
+  "adjusted_close",
+  "adj_close",
+  "adjClose",
+  "adjustedClose",
+  "AdjClose",
+] as const
+
+const HISTORY_OFFICIAL_CLOSE_KEYS = [
+  "closing_price",
+  "close_price",
+  "closingPrice",
+  "ClosingPrice",
+  "CLOSING_PRICE",
+  "official_close",
+  "officialClose",
+  "settlement_price",
+  "settlementPrice",
+  "end_of_day_price",
+  "endOfDayPrice",
+  "daily_close",
+  "dailyClose",
+  "last_trade_price",
+  "lastTradePrice",
+  "ltp",
+  "LTP",
+  "lastPrice",
+  "last_price",
+] as const
+
+const HISTORY_GENERIC_CLOSE_KEYS = ["close", "Close"] as const
+
+const HISTORY_MARKET_FALLBACK_KEYS = ["marketPrice", "market_price", "price", "Price"] as const
+
+function pickCloseFromObject(obj: any, keys: readonly string[]): number {
+  if (!obj || typeof obj !== "object") return 0
+  for (const k of keys) {
+    if (Object.prototype.hasOwnProperty.call(obj, k)) {
+      const n = toNumberHistory(obj[k])
+      if (n > 0) return n
+    }
+  }
+  return 0
+}
+
+/** Read session close from a row and common nested DSE/API shapes. */
+function historyPickSessionClose(item: any): number {
+  const layers = [
+    item,
+    item?.trade,
+    item?.market_data,
+    item?.marketData,
+    item?.attributes,
+    item?.details,
+    item?.ohlc,
+    item?.quote,
+  ].filter((o) => o != null && typeof o === "object" && !Array.isArray(o))
+
+  for (const layer of layers) {
+    let n = pickCloseFromObject(layer, HISTORY_ADJUSTED_CLOSE_KEYS)
+    if (n > 0) return n
+    n = pickCloseFromObject(layer, HISTORY_OFFICIAL_CLOSE_KEYS)
+    if (n > 0) return n
+  }
+  for (const layer of layers) {
+    const n = pickCloseFromObject(layer, HISTORY_GENERIC_CLOSE_KEYS)
+    if (n > 0) return n
+  }
+  for (const layer of layers) {
+    const n = pickCloseFromObject(layer, HISTORY_MARKET_FALLBACK_KEYS)
+    if (n > 0) return n
+  }
+  return 0
+}
+
+/** Normalize one history row: arrays like [date, o, h, l, c, vol] or { t, o, h, l, c }. */
+function normalizeRawHistoryRow(item: any): Record<string, unknown> | null {
+  if (item == null) return null
+  if (Array.isArray(item)) {
+    const d = item[0]
+    if (item.length >= 5) {
+      return {
+        date: d,
+        open: item[1],
+        high: item[2],
+        low: item[3],
+        close: item[4],
+        volume: item[5],
+      }
+    }
+    if (item.length >= 2) {
+      return { date: d, close: item[1], volume: item[2] }
+    }
+    return null
+  }
+  if (typeof item === "object") {
+    const t = item.t ?? item.T ?? item.time ?? item.timestamp
+    if (t != null && (item.c != null || item.C != null)) {
+      return {
+        ...item,
+        date: t,
+        close: item.c ?? item.C,
+        open: item.o ?? item.O,
+        high: item.h ?? item.H,
+        low: item.l ?? item.L,
+        volume: item.v ?? item.V ?? item.volume,
+      }
+    }
+    return item as Record<string, unknown>
+  }
+  return null
+}
 
 const toNumber = (value: unknown, fallback?: number) => {
   if (typeof value === "number" && Number.isFinite(value)) return value
@@ -185,47 +321,56 @@ const normalizeHistoryPayload = (data: any): HistoricalPoint[] => {
           ? data.prices
           : []
   return arrayPayload
-    .map((item: any) => {
-      const openRaw = toNumber(
+    .map((raw: any): HistoricalPoint | null => {
+      const item = normalizeRawHistoryRow(raw)
+      if (!item) return null
+
+      const rawDate = String(
+        item.date ??
+          item.trade_date ??
+          item.tradeDate ??
+          item.timestamp ??
+          item.day ??
+          item.createdAt ??
+          item.price_date ??
+          item.PriceDate ??
+          item.t ??
+          "",
+      ).trim()
+      const iso = historyDateToIsoDate(rawDate)
+      if (!iso) return null
+
+      const close = historyPickSessionClose(item)
+      if (!(close > 0)) return null
+
+      const openRaw = toNumberHistory(
         item.opening_price ??
           item.open_price ??
           item.openingPrice ??
           item.openPrice ??
           item.open ??
-          item.start_price,
+          item.start_price ??
+          item.Open ??
+          item.o ??
+          item.O,
       )
-      const close = toNumber(
-        item.closing_price ??
-          item.close_price ??
-          item.closingPrice ??
-          item.close ??
-          item.marketPrice ??
-          item.price,
+      const highRaw = toNumberHistory(
+        item.high ?? item.day_high ?? item.dayHigh ?? item.high_price ?? item.High ?? item.h ?? item.H,
       )
-      const highRaw = toNumber(item.high ?? item.day_high ?? item.dayHigh ?? item.high_price)
-      const lowRaw = toNumber(item.low ?? item.day_low ?? item.dayLow ?? item.low_price)
+      const lowRaw = toNumberHistory(
+        item.low ?? item.day_low ?? item.dayLow ?? item.low_price ?? item.Low ?? item.l ?? item.L,
+      )
       const point: HistoricalPoint = {
-        date: String(
-          item.date ??
-            item.trade_date ??
-            item.tradeDate ??
-            item.timestamp ??
-            item.day ??
-            item.createdAt ??
-            item.price_date ??
-            "",
-        )
-          .trim()
-          .slice(0, 10),
+        date: iso,
         close,
-        volume: toNumber(item.volume ?? item.total_volume ?? item.totalVolume),
+        volume: toNumberHistory(item.volume ?? item.total_volume ?? item.totalVolume ?? item.Volume ?? item.v ?? item.V),
       }
       if (openRaw > 0) point.open = openRaw
       if (highRaw > 0) point.high = highRaw
       if (lowRaw > 0) point.low = lowRaw
       return point
     })
-    .filter((point) => point.date.length > 0 && point.close > 0)
+    .filter((point: HistoricalPoint | null): point is HistoricalPoint => point != null && point.close > 0)
 }
 
 const generateFallbackHistory = (symbol: string, days: number, basePrice: number): HistoricalPoint[] => {

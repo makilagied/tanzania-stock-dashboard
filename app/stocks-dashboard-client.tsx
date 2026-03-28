@@ -122,6 +122,8 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   /** Live DSE feed failed and no server-side snapshot existed (or client could not reach API). */
   const [marketOutage, setMarketOutage] = useState(false)
+  const [indicesOutage, setIndicesOutage] = useState(false)
+  const [topMoversOutage, setTopMoversOutage] = useState(false)
   /** ISO timestamp when `stale` snapshot was written (from API). */
   const [staleFeedAt, setStaleFeedAt] = useState<string | null>(null)
   const [activeStock, setActiveStock] = useState<StockData | null>(null)
@@ -143,8 +145,9 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
 
   const selectedStock = stocks.find((s) => s.symbol === selectedSymbol) ?? null
 
-  /** Keep showing downtime while retrying (loading) so the layout does not flash empty main. */
-  const showMarketDowntime = stocks.length === 0 && (marketOutage || error != null)
+  /** Full-page DSE downtime when stocks cannot load or any primary market feed reports an outage. */
+  const showMarketDowntime =
+    (stocks.length === 0 && (marketOutage || error != null)) || indicesOutage || topMoversOutage
   const totalVolume = stocks.reduce((sum, s) => sum + s.volume, 0)
   const gainers = stocks.filter((s) => s.change > 0)
   const losers = stocks.filter((s) => s.change < 0)
@@ -415,6 +418,13 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
       setLoading(true)
       setError(null)
       const res = await fetch("/api/market/stocks")
+      if (!res.ok) {
+        setError(`Unable to fetch market data (${res.status}).`)
+        setStocks([])
+        setMarketOutage(true)
+        setStaleFeedAt(null)
+        return
+      }
       const payload = await res.json()
       const rows: StockData[] = Array.isArray(payload?.data) ? payload.data : []
       const outage = Boolean(payload?.outage) || payload?.source === "unavailable"
@@ -464,17 +474,41 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
   const fetchTopMovers = async () => {
     try {
       const res = await fetch("/api/market/top-movers")
+      if (!res.ok) {
+        setTopMovers([])
+        setTopMoversOutage(true)
+        return
+      }
       const payload = await res.json()
-      setTopMovers(Array.isArray(payload?.data) ? payload.data : [])
-    } catch { /* silent */ }
+      const data = Array.isArray(payload?.data) ? payload.data : []
+      setTopMovers(data)
+      setTopMoversOutage(Boolean(payload?.outage))
+    } catch {
+      setTopMovers([])
+      setTopMoversOutage(true)
+    }
   }
 
   const fetchIndices = async () => {
     try {
       const res = await fetch("/api/market/indices")
+      if (!res.ok) {
+        setIndices([])
+        setIndicesOutage(true)
+        return
+      }
       const payload = await res.json()
-      setIndices(Array.isArray(payload?.data) ? payload.data : [])
-    } catch { /* silent */ }
+      const data = Array.isArray(payload?.data) ? payload.data : []
+      setIndices(data)
+      setIndicesOutage(Boolean(payload?.outage))
+    } catch {
+      setIndices([])
+      setIndicesOutage(true)
+    }
+  }
+
+  const refreshMarketFeeds = async () => {
+    await Promise.all([fetchStocks(), fetchTopMovers(), fetchIndices()])
   }
 
   const fetchSelectedOrderBook = async (stockId: string) => {
@@ -526,15 +560,13 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
   }, [isDarkMode])
 
   useEffect(() => {
-    fetchStocks()
-    fetchTopMovers()
-    fetchIndices()
+    void refreshMarketFeeds()
     const isMarketHours = () => {
       const h = new Date().getHours()
       return h >= 10 && h < 18
     }
     const interval = setInterval(() => {
-      if (isMarketHours()) { fetchStocks(); fetchTopMovers(); fetchIndices() }
+      if (isMarketHours()) void refreshMarketFeeds()
     }, 300000)
     return () => clearInterval(interval)
   }, [])
@@ -601,7 +633,7 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={toggleDarkMode}>
           {isDarkMode ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
         </Button>
-        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={fetchStocks} disabled={loading}>
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={refreshMarketFeeds} disabled={loading}>
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
         </Button>
       </SiteHeader>
@@ -609,7 +641,7 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
       {seoIntro}
 
       {showMarketDowntime ? (
-        <MarketDowntime onRetry={fetchStocks} loading={loading} />
+        <MarketDowntime onRetry={refreshMarketFeeds} loading={loading} />
       ) : (
         <>
           {staleFeedAt && (
