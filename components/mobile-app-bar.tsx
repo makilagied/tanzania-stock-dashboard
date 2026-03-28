@@ -2,12 +2,13 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BarChart3, PieChart } from "lucide-react"
+import { BarChart3, GitCompareArrows, PieChart } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const ITEMS = [
   { href: "/", label: "Stocks", Icon: BarChart3 },
   { href: "/funds", label: "Funds", Icon: PieChart },
+  { href: "/compare", label: "Compare", Icon: GitCompareArrows },
 ] as const
 
 export function MobileAppBar() {
@@ -18,7 +19,7 @@ export function MobileAppBar() {
       className="fixed bottom-0 left-0 right-0 z-[60] border-t border-border/80 bg-background/95 shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.12)] backdrop-blur-md print:hidden dark:shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.35)] lg:hidden"
       aria-label="Main navigation"
     >
-      <div className="mx-auto flex max-w-lg items-stretch justify-around px-1 pt-0.5">
+      <div className="mx-auto flex max-w-xl items-stretch justify-around px-0.5 pt-0.5">
         {ITEMS.map(({ href, label, Icon }) => {
           const active =
             href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`)
