@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 const NAV = [
   { href: "/", label: "Stocks", short: "Stocks" },
   { href: "/funds", label: "Funds & ETFs", short: "Funds" },
+  { href: "/compare", label: "Compare", short: "Compare" },
 ] as const
 
 export type SiteHeaderProps = {
