@@ -15,13 +15,13 @@ export type ITrustFundMeta = {
 
 /** All funds under iTrust Finance as requested */
 export const ITRUST_FUNDS: ITrustFundMeta[] = [
-  { id: "iCash", label: "iCash", shortLabel: "Cash", category: "mutual-fund", currency: "TZS" },
-  { id: "iGrowth", label: "iGrowth", shortLabel: "Growth", category: "mutual-fund", currency: "TZS" },
-  { id: "iSave", label: "iSave", shortLabel: "Save", category: "mutual-fund", currency: "TZS" },
-  { id: "iIncome", label: "iIncome", shortLabel: "Income", category: "mutual-fund", currency: "TZS" },
+  { id: "iCash", label: "iCash", shortLabel: "iCash", category: "mutual-fund", currency: "TZS" },
+  { id: "iGrowth", label: "iGrowth", shortLabel: "iGrowth", category: "mutual-fund", currency: "TZS" },
+  { id: "iSave", label: "iSave", shortLabel: "iSave", category: "mutual-fund", currency: "TZS" },
+  { id: "iIncome", label: "iIncome", shortLabel: "iIncome", category: "mutual-fund", currency: "TZS" },
   { id: "Imaan", label: "Imaan", shortLabel: "Imaan", category: "mutual-fund", currency: "TZS" },
-  { id: "iDollar", label: "iDollar", shortLabel: "Dollar", category: "mutual-fund", currency: "USD" },
-  { id: "iEACLC-ETF", label: "iEACLC ETF", shortLabel: "EAC LC", category: "etf", currency: "TZS" },
+  { id: "iDollar", label: "iDollar", shortLabel: "iDollar", category: "mutual-fund", currency: "USD" },
+  { id: "iEACLC-ETF", label: "iEACLC ETF", shortLabel: "iEACLC ETF", category: "etf", currency: "TZS" },
 ]
 
 const ITRUST_BASE = "https://api.itrust.co.tz/api/fund"

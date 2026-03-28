@@ -3,7 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import type { ApexOptions } from "apexcharts"
-import { ChevronDown, GitCompareArrows, Moon, RefreshCw, Search, Sun } from "lucide-react"
+import {
+  ChevronDown,
+  GitCompareArrows,
+  Maximize2,
+  Minimize2,
+  Moon,
+  RefreshCw,
+  Search,
+  Sun,
+} from "lucide-react"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
@@ -15,7 +24,7 @@ import {
   filterFundRowsByPeriod,
   type FundAnalyticsPeriod,
 } from "@/lib/fund-analytics"
-import { ALL_FUNDS, type FundMeta } from "@/lib/funds-catalog"
+import { ALL_FUNDS, getFundMeta, type FundMeta } from "@/lib/funds-catalog"
 import type { ITrustFundRecord } from "@/lib/itrust-funds"
 import type { HistoricalPoint } from "@/lib/market-data"
 import {
@@ -30,6 +39,10 @@ import { cn } from "@/lib/utils"
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false })
 
 const STOCK_HISTORY_DAYS = 4000
+
+/** Scroll still works; bars hidden (matches stocks dashboard). */
+const SCROLL_NO_BAR =
+  "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
 
 type StockRow = {
   id: string
@@ -150,6 +163,7 @@ function SidePicker({
   fundQuery,
   onFundQuery,
   disabled,
+  compactLists,
 }: {
   label: string
   kind: SideKind
@@ -164,30 +178,40 @@ function SidePicker({
   fundQuery: string
   onFundQuery: (q: string) => void
   disabled?: boolean
+  /** Shorter scroll areas when used in the compare sidebar */
+  compactLists?: boolean
 }) {
+  const listMaxH = compactLists ? "max-h-40" : "max-h-64"
   const filteredStocks = useMemo(() => {
     const t = stockQuery.trim().toLowerCase()
-    if (!t) return stocks.slice(0, 12)
-    return stocks
-      .filter((s) => s.symbol.toLowerCase().includes(t) || s.name.toLowerCase().includes(t))
-      .slice(0, 20)
+    const base = t
+      ? stocks.filter((s) => s.symbol.toLowerCase().includes(t) || s.name.toLowerCase().includes(t))
+      : [...stocks]
+    return base.sort((a, b) => a.symbol.localeCompare(b.symbol))
   }, [stocks, stockQuery])
 
   const filteredFunds = useMemo(() => {
     const t = fundQuery.trim().toLowerCase()
-    if (!t) return ALL_FUNDS.slice(0, 12)
-    return ALL_FUNDS.filter(
-      (f) =>
-        f.label.toLowerCase().includes(t) ||
-        f.shortLabel.toLowerCase().includes(t) ||
-        f.id.toLowerCase().includes(t),
-    ).slice(0, 20)
+    const base = t
+      ? ALL_FUNDS.filter(
+          (f) =>
+            f.label.toLowerCase().includes(t) ||
+            f.shortLabel.toLowerCase().includes(t) ||
+            f.id.toLowerCase().includes(t),
+        )
+      : [...ALL_FUNDS]
+    return base.sort((a, b) => a.label.localeCompare(b.label))
   }, [fundQuery])
 
   const selectedFundMeta = ALL_FUNDS.find((f) => f.id === fundId)
 
   return (
-    <div className="rounded-xl border border-border/80 bg-card/40 p-3 shadow-sm sm:p-4">
+    <div
+      className={cn(
+        "rounded-xl border border-border/80 bg-card/40 shadow-sm",
+        compactLists ? "p-2.5" : "p-3 sm:p-4",
+      )}
+    >
       <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
       <div className="mb-3 flex gap-1 rounded-lg border border-border/60 bg-muted/30 p-0.5">
         {(["stock", "fund"] as const).map((k) => (
@@ -218,9 +242,17 @@ function SidePicker({
               disabled={disabled}
             />
           </div>
-          <div className="max-h-40 overflow-y-auto rounded-md border border-border/60 bg-background/80">
+          <div
+            className={cn(
+              "overflow-y-auto rounded-md border border-border/60 bg-background/80",
+              SCROLL_NO_BAR,
+              listMaxH,
+            )}
+          >
             {filteredStocks.length === 0 ? (
-              <p className="p-3 text-xs text-muted-foreground">No matches</p>
+              <p className="p-3 text-xs text-muted-foreground">
+                {stocks.length === 0 ? "No stocks loaded yet." : "No matches"}
+              </p>
             ) : (
               filteredStocks.map((s) => (
                 <button
@@ -258,7 +290,13 @@ function SidePicker({
               disabled={disabled}
             />
           </div>
-          <div className="max-h-40 overflow-y-auto rounded-md border border-border/60 bg-background/80">
+          <div
+            className={cn(
+              "overflow-y-auto rounded-md border border-border/60 bg-background/80",
+              SCROLL_NO_BAR,
+              listMaxH,
+            )}
+          >
             {filteredFunds.length === 0 ? (
               <p className="p-3 text-xs text-muted-foreground">No matches</p>
             ) : (
@@ -327,6 +365,19 @@ export default function ComparePageClient() {
 
   const leftKeyRef = useRef("")
   const rightKeyRef = useRef("")
+  const chartContainerRef = useRef<HTMLElement | null>(null)
+  const [chartFullscreen, setChartFullscreen] = useState(false)
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      const current = document.fullscreenElement
+      setChartFullscreen(
+        Boolean(current && chartContainerRef.current && current === chartContainerRef.current),
+      )
+    }
+    document.addEventListener("fullscreenchange", onFullscreenChange)
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange)
+  }, [])
 
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem("theme") : null
@@ -345,6 +396,16 @@ export default function ComparePageClient() {
   const toggleDarkMode = () => {
     setIsDarkMode((d) => !d)
     document.documentElement.classList.toggle("dark")
+  }
+
+  const toggleChartFullscreen = async () => {
+    const host = chartContainerRef.current
+    if (!host) return
+    if (document.fullscreenElement === host) {
+      await document.exitFullscreen()
+      return
+    }
+    await host.requestFullscreen()
   }
 
   const loadStocks = useCallback(async () => {
@@ -376,6 +437,9 @@ export default function ComparePageClient() {
     leftKeyRef.current = key
     setLeftLoading(true)
     setLeftError(null)
+    setLeftHistory([])
+    setLeftFundRows([])
+    setLeftFundMeta(leftKind === "fund" ? getFundMeta(leftFund) : null)
 
     const run = async () => {
       try {
@@ -435,6 +499,9 @@ export default function ComparePageClient() {
     rightKeyRef.current = key
     setRightLoading(true)
     setRightError(null)
+    setRightHistory([])
+    setRightFundRows([])
+    setRightFundMeta(rightKind === "fund" ? getFundMeta(rightFund) : null)
 
     const run = async () => {
       try {
@@ -532,6 +599,12 @@ export default function ComparePageClient() {
     return computeFundPeriodAnalytics(rightFundAsc, period)
   }, [rightKind, rightFundAsc, period])
 
+  const chartRemountKey = useMemo(
+    () =>
+      `${leftKind}:${leftKind === "stock" ? leftStock : leftFund}|${rightKind}:${rightKind === "stock" ? rightStock : rightFund}|${period}`,
+    [leftKind, leftStock, leftFund, rightKind, rightStock, rightFund, period],
+  )
+
   const chartSeries = useMemo(() => {
     const series: { name: string; data: { x: number; y: number }[] }[] = []
 
@@ -541,7 +614,9 @@ export default function ComparePageClient() {
       const pts = normalizedFromCloses(slice)
       if (pts.length > 0) {
         series.push({
-          name: `${leftStock} (price, indexed)`,
+          name: leftStockLive?.name
+            ? `${leftStock} — ${leftStockLive.name} (price)`
+            : `${leftStock} (price, indexed)`,
           data: pts,
         })
       }
@@ -550,7 +625,11 @@ export default function ComparePageClient() {
       const pts = normalizedFromNav(slice)
       if (pts.length > 0) {
         series.push({
-          name: `${leftFundMeta?.shortLabel ?? leftFund} (NAV, indexed)`,
+          name: leftFundMeta?.label
+            ? leftFundMeta.shortLabel === leftFundMeta.label
+              ? `${leftFundMeta.label} (NAV)`
+              : `${leftFundMeta.shortLabel} — ${leftFundMeta.label} (NAV)`
+            : `${leftFund} (NAV, indexed)`,
           data: pts,
         })
       }
@@ -562,7 +641,9 @@ export default function ComparePageClient() {
       const pts = normalizedFromCloses(slice)
       if (pts.length > 0) {
         series.push({
-          name: `${rightStock} (price, indexed)`,
+          name: rightStockLive?.name
+            ? `${rightStock} — ${rightStockLive.name} (price)`
+            : `${rightStock} (price, indexed)`,
           data: pts,
         })
       }
@@ -571,7 +652,11 @@ export default function ComparePageClient() {
       const pts = normalizedFromNav(slice)
       if (pts.length > 0) {
         series.push({
-          name: `${rightFundMeta?.shortLabel ?? rightFund} (NAV, indexed)`,
+          name: rightFundMeta?.label
+            ? rightFundMeta.shortLabel === rightFundMeta.label
+              ? `${rightFundMeta.label} (NAV)`
+              : `${rightFundMeta.shortLabel} — ${rightFundMeta.label} (NAV)`
+            : `${rightFund} (NAV, indexed)`,
           data: pts,
         })
       }
@@ -591,13 +676,15 @@ export default function ComparePageClient() {
     rightFund,
     leftFundMeta,
     rightFundMeta,
+    leftStockLive,
+    rightStockLive,
     period,
   ])
 
   const apexOptions = useMemo<ApexOptions>(
     () => ({
       chart: {
-        id: "compare-indexed",
+        id: `compare-indexed-${chartRemountKey.replace(/[^a-zA-Z0-9|:-]/g, "-")}`,
         type: "line",
         background: "transparent",
         toolbar: { tools: { download: false } },
@@ -619,7 +706,7 @@ export default function ComparePageClient() {
       },
       theme: { mode: isDarkMode ? "dark" : "light" },
     }),
-    [isDarkMode],
+    [isDarkMode, chartRemountKey],
   )
 
   const leftTitle =
@@ -655,10 +742,10 @@ export default function ComparePageClient() {
         </Button>
       </SiteHeader>
 
-      <main className="mx-auto w-full max-w-[1400px] flex-1 px-3 py-4 sm:px-6 sm:py-6">
+      <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-4 lg:px-6 lg:py-5">
 
         {/* Page header */}
-        <div className="mb-5 flex items-center gap-3">
+        <div className="mb-4 flex items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <GitCompareArrows className="h-4.5 w-4.5" aria-hidden />
           </div>
@@ -676,128 +763,191 @@ export default function ComparePageClient() {
           </p>
         )}
 
-        {/* Instrument pickers + period controls in one compact row */}
-        <div className="mb-4 rounded-xl border border-border/70 bg-card/40 shadow-sm">
-          {/* Period bar */}
-          <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2">
-            <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Period</span>
-            <div className="flex flex-wrap gap-1">
-              {ANALYTICS_PERIOD_OPTIONS.map((o) => (
-                <button
-                  key={o.id}
-                  type="button"
-                  onClick={() => setPeriod(o.id)}
-                  className={cn(
-                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                    period === o.id
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                >
-                  {o.short}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Instrument A vs B */}
-          <div className="grid gap-0 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border/50">
-            {/* Left badge */}
-            <div className="flex items-center gap-2 px-3 py-2">
-              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">A</span>
-              <span className="truncate text-sm font-semibold">{leftTitle}</span>
-              <span className={cn("ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                leftKind === "stock" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-violet-500/10 text-violet-600 dark:text-violet-400"
-              )}>
-                {leftKind === "stock" ? "Stock" : "Fund"}
-              </span>
-            </div>
-            {/* Right badge */}
-            <div className="flex items-center gap-2 px-3 py-2">
-              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-[10px] font-bold text-blue-600 dark:text-blue-400">B</span>
-              <span className="truncate text-sm font-semibold">{rightTitle}</span>
-              <span className={cn("ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                rightKind === "stock" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400" : "bg-violet-500/10 text-violet-600 dark:text-violet-400"
-              )}>
-                {rightKind === "stock" ? "Stock" : "Fund"}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Side pickers */}
-        <div className="mb-5 grid gap-3 sm:grid-cols-2">
-          <SidePicker
-            label="Instrument A"
-            kind={leftKind}
-            onKind={setLeftKind}
-            stockSymbol={leftStock}
-            onStockSymbol={setLeftStock}
-            fundId={leftFund}
-            onFundId={setLeftFund}
-            stocks={stocks}
-            stockQuery={leftStockQ}
-            onStockQuery={setLeftStockQ}
-            fundQuery={leftFundQ}
-            onFundQuery={setLeftFundQ}
-            disabled={stocksLoading && stocks.length === 0}
-          />
-          <SidePicker
-            label="Instrument B"
-            kind={rightKind}
-            onKind={setRightKind}
-            stockSymbol={rightStock}
-            onStockSymbol={setRightStock}
-            fundId={rightFund}
-            onFundId={setRightFund}
-            stocks={stocks}
-            stockQuery={rightStockQ}
-            onStockQuery={setRightStockQ}
-            fundQuery={rightFundQ}
-            onFundQuery={setRightFundQ}
-            disabled={stocksLoading && stocks.length === 0}
-          />
-        </div>
-
-        {/* Errors */}
-        {(leftError || rightError) && (
-          <div className="mb-4 grid gap-2 sm:grid-cols-2">
-            {leftError ? (
-              <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-                <span className="font-semibold">A:</span> {leftError}
-              </p>
-            ) : <div />}
-            {rightError ? (
-              <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-                <span className="font-semibold">B:</span> {rightError}
-              </p>
-            ) : null}
-          </div>
-        )}
-
-        {/* Chart */}
-        <section className="mb-5 rounded-xl border border-border/70 bg-card/30 shadow-sm">
-          <div className="flex items-center justify-between border-b border-border/50 px-4 py-2.5">
-            <div>
-              <h2 className="text-sm font-semibold">Indexed performance <span className="text-muted-foreground font-normal">({period.toUpperCase()})</span></h2>
-              <p className="text-[11px] text-muted-foreground">Both lines start at 100. Stocks = closing price; funds = NAV per unit.</p>
-            </div>
-            {busy && <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-          </div>
-          <div className="p-3">
-            {busy && chartSeries.length === 0 ? (
-              <div className="flex h-52 items-center justify-center text-sm text-muted-foreground">Loading series…</div>
-            ) : chartSeries.length < 2 ? (
-              <div className="flex h-52 items-center justify-center text-sm text-muted-foreground">
-                Select two instruments with history to see the chart.
+        {/* Stocks-style layout: chart (main) | instrument column */}
+        <div className="mb-5 grid gap-4 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px]">
+          {/* LEFT: indexed chart — same height pattern as stocks dashboard */}
+          <div className="flex min-h-0 flex-col lg:h-[650px]">
+            <section
+              ref={chartContainerRef}
+              className={cn(
+                "flex min-h-0 flex-col rounded-xl bg-card shadow-md",
+                chartFullscreen
+                  ? "fixed inset-0 z-[120] h-screen w-screen rounded-none border-0 bg-background p-3 sm:p-4 shadow-none"
+                  : "h-[300px] border border-border/60 lg:h-auto lg:flex-1",
+              )}
+            >
+              <div className="flex shrink-0 flex-col gap-2 border-b border-border/50 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-sm font-semibold">
+                    Indexed performance{" "}
+                    <span className="font-normal text-muted-foreground">({period.toUpperCase()})</span>
+                  </h2>
+                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground break-words">
+                    <span className="font-medium text-foreground">{leftTitle}</span>
+                    <span className="text-muted-foreground"> vs </span>
+                    <span className="font-medium text-foreground">{rightTitle}</span>
+                    <span className="text-muted-foreground"> · Start = 100 (close / NAV).</span>
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 px-2 text-[10px]"
+                    onClick={() => void toggleChartFullscreen()}
+                    title={chartFullscreen ? "Exit fullscreen" : "Fullscreen chart"}
+                  >
+                    {chartFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                    {chartFullscreen ? "Exit" : "Full"}
+                  </Button>
+                  {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
+                </div>
               </div>
-            ) : (
-              <div className="w-full">
-                <ReactApexChart options={apexOptions} series={chartSeries} type="line" height={300} />
+              <div
+                className={cn(
+                  "flex min-h-0 flex-1 flex-col",
+                  chartFullscreen ? "p-0 pt-2" : "h-[220px] p-3 lg:h-auto lg:min-h-0 lg:flex-1",
+                )}
+              >
+                {busy && chartSeries.length === 0 ? (
+                  <div className="flex h-full flex-1 items-center justify-center text-sm text-muted-foreground">
+                    Loading series…
+                  </div>
+                ) : chartSeries.length < 2 ? (
+                  <div className="flex h-full flex-1 items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                    Select two instruments with history to see the chart.
+                  </div>
+                ) : (
+                  <div className="h-full w-full min-h-[180px]">
+                    <ReactApexChart
+                      key={chartRemountKey}
+                      options={apexOptions}
+                      series={chartSeries}
+                      type="line"
+                      height="100%"
+                    />
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+
+          {/* RIGHT: period + A/B + pickers (scrolls if taller than chart) */}
+          <aside
+            className={cn(
+              "flex min-h-0 flex-col gap-3 lg:max-h-[650px] lg:overflow-y-auto lg:pr-1",
+              SCROLL_NO_BAR,
+            )}
+          >
+            <div className="rounded-xl border border-border/70 bg-card/40 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2 border-b border-border/50 px-3 py-2">
+                <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Period
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {ANALYTICS_PERIOD_OPTIONS.map((o) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => setPeriod(o.id)}
+                      className={cn(
+                        "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                        period === o.id
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      {o.short}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="divide-y divide-border/50">
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    A
+                  </span>
+                  <span className="min-w-0 truncate text-sm font-semibold">{leftTitle}</span>
+                  <span
+                    className={cn(
+                      "ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                      leftKind === "stock"
+                        ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                        : "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+                    )}
+                  >
+                    {leftKind === "stock" ? "Stock" : "Fund"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                    B
+                  </span>
+                  <span className="min-w-0 truncate text-sm font-semibold">{rightTitle}</span>
+                  <span
+                    className={cn(
+                      "ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                      rightKind === "stock"
+                        ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                        : "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+                    )}
+                  >
+                    {rightKind === "stock" ? "Stock" : "Fund"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <SidePicker
+              label="Instrument A"
+              kind={leftKind}
+              onKind={setLeftKind}
+              stockSymbol={leftStock}
+              onStockSymbol={setLeftStock}
+              fundId={leftFund}
+              onFundId={setLeftFund}
+              stocks={stocks}
+              stockQuery={leftStockQ}
+              onStockQuery={setLeftStockQ}
+              fundQuery={leftFundQ}
+              onFundQuery={setLeftFundQ}
+              disabled={stocksLoading && stocks.length === 0}
+              compactLists
+            />
+            <SidePicker
+              label="Instrument B"
+              kind={rightKind}
+              onKind={setRightKind}
+              stockSymbol={rightStock}
+              onStockSymbol={setRightStock}
+              fundId={rightFund}
+              onFundId={setRightFund}
+              stocks={stocks}
+              stockQuery={rightStockQ}
+              onStockQuery={setRightStockQ}
+              fundQuery={rightFundQ}
+              onFundQuery={setRightFundQ}
+              disabled={stocksLoading && stocks.length === 0}
+              compactLists
+            />
+
+            {(leftError || rightError) && (
+              <div className="grid gap-2">
+                {leftError ? (
+                  <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                    <span className="font-semibold">A:</span> {leftError}
+                  </p>
+                ) : null}
+                {rightError ? (
+                  <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                    <span className="font-semibold">B:</span> {rightError}
+                  </p>
+                ) : null}
               </div>
             )}
-          </div>
-        </section>
+          </aside>
+        </div>
 
         {/* Perspective tabs */}
         <div className="mb-4 flex gap-1 border-b border-border/60 pb-0">
@@ -826,7 +976,12 @@ export default function ComparePageClient() {
 
         {/* Performance table */}
         {perspective === "performance" && (
-          <section className="mb-5 overflow-x-auto rounded-xl border border-border/70 bg-card/30 shadow-sm">
+          <section
+            className={cn(
+              "mb-5 overflow-x-auto rounded-xl border border-border/70 bg-card/30 shadow-sm",
+              SCROLL_NO_BAR,
+            )}
+          >
             <table className="w-full min-w-[480px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border/70 bg-muted/30">
@@ -895,7 +1050,12 @@ export default function ComparePageClient() {
 
         {/* Snapshot table */}
         {perspective === "snapshot" && (
-          <section className="mb-5 overflow-x-auto rounded-xl border border-border/70 bg-card/30 shadow-sm">
+          <section
+            className={cn(
+              "mb-5 overflow-x-auto rounded-xl border border-border/70 bg-card/30 shadow-sm",
+              SCROLL_NO_BAR,
+            )}
+          >
             <table className="w-full min-w-[480px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border/70 bg-muted/30">
@@ -976,7 +1136,12 @@ export default function ComparePageClient() {
 
         {/* Context table */}
         {perspective === "context" && (
-          <section className="mb-5 overflow-x-auto rounded-xl border border-border/70 bg-card/30 shadow-sm">
+          <section
+            className={cn(
+              "mb-5 overflow-x-auto rounded-xl border border-border/70 bg-card/30 shadow-sm",
+              SCROLL_NO_BAR,
+            )}
+          >
             <table className="w-full min-w-[480px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border/70 bg-muted/30">
