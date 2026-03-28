@@ -29,10 +29,10 @@ Investors Dashboard is a Next.js web app for **Dar es Salaam Stock Exchange (DSE
 
 **Requirements:** Node.js 20+ recommended.
 
-```bash
+\`\`\`bash
 pnpm install
 pnpm dev
-```
+\`\`\`
 
 Open [http://localhost:3000](http://localhost:3000). The funds section lives at [http://localhost:3000/funds](http://localhost:3000/funds).
 
