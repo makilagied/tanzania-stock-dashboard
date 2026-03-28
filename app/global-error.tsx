@@ -19,7 +19,14 @@ export default function GlobalError({
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         <div className="flex min-h-screen flex-col items-center justify-center px-4 py-16">
           <div className="w-full max-w-md rounded-xl border border-border bg-card p-8 text-center shadow-md">
-            <h1 className="text-xl font-semibold tracking-tight">Investor&apos;s Dashboard</h1>
+            <img
+              src="/icon-uwekezaji.png"
+              alt=""
+              width={56}
+              height={56}
+              className="mx-auto h-14 w-14 object-contain"
+            />
+            <h1 className="mt-4 text-xl font-semibold tracking-tight">Investors Dashboard</h1>
             <p className="mt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Critical error
             </p>

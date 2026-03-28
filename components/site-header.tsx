@@ -1,50 +1,58 @@
 "use client"
 
 import type { ReactNode } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import type { LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const NAV = [
   { href: "/", label: "Stocks", short: "Stocks" },
   { href: "/funds", label: "Funds & ETFs", short: "Funds" },
+  { href: "/compare", label: "Compare", short: "Compare" },
 ] as const
 
 export type SiteHeaderProps = {
-  icon: LucideIcon
   title: string
   subtitle: string
   children?: ReactNode
 }
 
-export function SiteHeader({ icon: Icon, title, subtitle, children }: SiteHeaderProps) {
+export function SiteHeader({ title, subtitle, children }: SiteHeaderProps) {
   const pathname = usePathname()
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/"
-    return pathname.startsWith(href)
+    return pathname === href || pathname.startsWith(`${href}/`)
   }
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/95 shadow-sm backdrop-blur-sm">
       <div className="mx-auto flex min-h-12 max-w-[1600px] items-center gap-2 px-4 py-2 sm:min-h-[3.25rem] sm:gap-3 lg:px-6">
-        {/* Brand: icon + titles (titles visible on all widths; subtitle from sm+) */}
-        <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary shadow-sm">
-            <Icon className="h-4 w-4 text-primary-foreground" aria-hidden />
-          </div>
+        <Link
+          href="/"
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring sm:gap-3"
+        >
+          <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg shadow-sm ring-1 ring-border/60 bg-background">
+            <Image
+              src="/icon-uwekezaji.png"
+              alt=""
+              width={32}
+              height={32}
+              className="h-8 w-8 object-contain"
+              priority
+            />
+          </span>
           <div className="min-w-0 max-w-[min(11rem,46vw)] sm:max-w-[min(18rem,42vw)] md:max-w-xs lg:max-w-md">
             <p className="truncate text-xs font-semibold leading-snug tracking-tight sm:text-[13px]">{title}</p>
             <p className="truncate text-[10px] leading-snug text-muted-foreground sm:text-[11px] hidden sm:block">
               {subtitle}
             </p>
           </div>
-        </div>
+        </Link>
 
-        {/* Primary nav — segmented, vertically centered with brand */}
         <nav
-          className="flex shrink-0 items-center rounded-lg border border-border/80 bg-muted/40 p-0.5 shadow-sm"
+          className="hidden shrink-0 items-center rounded-lg border border-border/80 bg-muted/40 p-0.5 shadow-sm lg:flex"
           aria-label="Main"
         >
           {NAV.map((item) => {
@@ -67,7 +75,6 @@ export function SiteHeader({ icon: Icon, title, subtitle, children }: SiteHeader
           })}
         </nav>
 
-        {/* Toolbar */}
         <div className="flex shrink-0 items-center justify-end gap-1 sm:gap-1.5">{children}</div>
       </div>
     </header>

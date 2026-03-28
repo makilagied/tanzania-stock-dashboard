@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 export const metadata: Metadata = {
-  title: "404 - Page Not Found | DSE Dashboard",
-  description: "The page you requested could not be found.",
+  title: "404 — Page not found",
+  description: "The page you requested could not be found on Uwekezaji Online.",
 }
 
 export default function NotFound() {
@@ -168,7 +168,7 @@ export default function NotFound() {
                 <Button asChild size="lg" className="gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-500/25 hover:from-emerald-600 hover:to-emerald-700">
                   <Link href="/">
                     <Home className="h-4 w-4" />
-                    Back to Dashboard
+                    Back to home
                   </Link>
                 </Button>
                 <Button asChild size="lg" variant="outline" className="gap-2 border-border/60 bg-background/50">

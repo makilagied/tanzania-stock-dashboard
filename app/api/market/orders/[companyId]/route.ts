@@ -12,13 +12,25 @@ export async function GET(
 ) {
   try {
     const { companyId } = await context.params
-    const { data: orders, stale, cachedAtMs } = await getCachedMarketOrders(companyId)
-    return NextResponse.json(orders, {
-      headers: {
-        "Cache-Control": stale ? CACHE_CONTROL_STALE_SNAPSHOT : cacheControlPublicSeconds(60),
-        ...(stale ? staleMetaHeaders(cachedAtMs) : {}),
+    const { data: orders, stale, cachedAtMs, outage } = await getCachedMarketOrders(companyId)
+    return NextResponse.json(
+      {
+        ...orders,
+        ...(outage ? { outage: true } : {}),
+        ...(stale
+          ? {
+              stale: true,
+              ...(cachedAtMs != null ? { cachedAt: new Date(cachedAtMs).toISOString() } : {}),
+            }
+          : {}),
       },
-    })
+      {
+        headers: {
+          "Cache-Control": stale ? CACHE_CONTROL_STALE_SNAPSHOT : cacheControlPublicSeconds(60),
+          ...(stale ? staleMetaHeaders(cachedAtMs) : {}),
+        },
+      },
+    )
   } catch {
     return NextResponse.json(
       { bestSellPrice: 0, bestBuyPrice: 0, orders: [] },

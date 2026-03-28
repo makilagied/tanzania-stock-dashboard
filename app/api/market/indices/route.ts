@@ -18,7 +18,13 @@ const defaultFromDate = () => {
 export async function GET(request: NextRequest) {
   try {
     const from = request.nextUrl.searchParams.get("from") || defaultFromDate()
-    const { data: payload, stale, cachedAtMs } = await getCachedShareIndices(from)
+    const { data: payload, stale, cachedAtMs, outage } = await getCachedShareIndices(from)
+    if (outage) {
+      return NextResponse.json(
+        { success: false, from, data: [], error: "Indices unavailable and no cached snapshot.", outage: true },
+        { status: 200, headers: { "Cache-Control": "no-store" } },
+      )
+    }
     return NextResponse.json(
       {
         success: payload.success,

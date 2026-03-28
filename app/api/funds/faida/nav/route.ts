@@ -15,13 +15,14 @@ import { FAIDA_CSV_PUBLIC_PATH } from "@/lib/load-fund-records"
  */
 export async function GET() {
   try {
-    const { data, stale, cachedAtMs } = await getCachedFaidaNavRecords()
+    const { data, stale, cachedAtMs, outage } = await getCachedFaidaNavRecords()
     return NextResponse.json(
       {
-        success: true,
+        success: !outage && data.length > 0,
         fundId: FAIDA_FUND.id,
         meta: FAIDA_FUND,
         data,
+        ...(outage ? { outage: true, error: "Faida NAV data unavailable and no cached snapshot." } : {}),
         source: "csv",
         path: FAIDA_CSV_PUBLIC_PATH,
         ...(stale

@@ -7,6 +7,7 @@ import { readFile } from "fs/promises"
 import path from "path"
 import { INUKA_FUND_DIR } from "@/lib/inuka-fund-meta"
 import type { ITrustFundRecord } from "@/lib/itrust-funds"
+import { parseFlexibleDateTs } from "@/lib/date-parse"
 
 export function getInukaCsvAbsolutePath(csvFile: string): string {
   return path.join(process.cwd(), "public", INUKA_FUND_DIR, csvFile)
@@ -20,19 +21,8 @@ function parseCommaNumber(raw: string): number {
 
 /** DD-MM-YYYY or DD/MM/YYYY (day first, common in TZ) */
 function parseInukaDate(raw: string): number {
-  const s = raw.trim()
-  const dmyDash = /^(\d{1,2})-(\d{1,2})-(\d{4})$/.exec(s)
-  if (dmyDash) {
-    const [, d, mo, y] = dmyDash
-    return new Date(Number(y), Number(mo) - 1, Number(d)).getTime()
-  }
-  const dmySlash = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s)
-  if (dmySlash) {
-    const [, d, mo, y] = dmySlash
-    return new Date(Number(y), Number(mo) - 1, Number(d)).getTime()
-  }
-  const t = Date.parse(s)
-  return Number.isNaN(t) ? 0 : t
+  // Inuka exports are mixed: dashes are day-first, slashes are month-first.
+  return parseFlexibleDateTs(raw, { dashPreference: "day-first", slashPreference: "month-first" })
 }
 
 /** Split simple CSV line (no quoted commas in these files). */

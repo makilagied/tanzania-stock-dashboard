@@ -1,4 +1,5 @@
 /** iTrust Finance fund APIs — consumed via Next.js routes (server-side). */
+import { parseFlexibleDateTs } from "@/lib/date-parse"
 
 export type FundCategory = "mutual-fund" | "etf"
 
@@ -44,12 +45,7 @@ const toNum = (v: unknown) => {
 
 /** Parse API date like "3/18/2026" to timestamp for sorting */
 export const parseITrustDate = (raw: string): number => {
-  const t = Date.parse(raw)
-  if (!Number.isNaN(t)) return t
-  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw.trim())
-  if (!m) return 0
-  const [, mo, d, y] = m
-  return new Date(Number(y), Number(mo) - 1, Number(d)).getTime()
+  return parseFlexibleDateTs(raw, { preference: "month-first" })
 }
 
 export const normalizeFundPayload = (raw: unknown[]): ITrustFundRecord[] => {
