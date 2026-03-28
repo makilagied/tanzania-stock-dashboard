@@ -46,7 +46,12 @@ export async function GET(request: NextRequest) {
     )
   } catch {
     return NextResponse.json(
-      { success: false, data: [], error: "Unable to fetch indices right now." },
+      {
+        success: false,
+        data: [],
+        error: "Unable to fetch indices right now.",
+        outage: true,
+      },
       { status: 200, headers: { "Cache-Control": "no-store" } },
     )
   }

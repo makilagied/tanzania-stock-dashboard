@@ -35,7 +35,12 @@ export async function GET() {
     )
   } catch {
     return NextResponse.json(
-      { success: false, data: [], error: "Unable to fetch gainers and losers right now." },
+      {
+        success: false,
+        data: [],
+        error: "Unable to fetch gainers and losers right now.",
+        outage: true,
+      },
       { status: 200, headers: { "Cache-Control": "no-store" } },
     )
   }

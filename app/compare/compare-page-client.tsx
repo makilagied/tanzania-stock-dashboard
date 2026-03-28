@@ -164,6 +164,8 @@ function SidePicker({
   onFundQuery,
   disabled,
   compactLists,
+  stocksAvailable,
+  stocksUnavailableHint,
 }: {
   label: string
   kind: SideKind
@@ -180,8 +182,13 @@ function SidePicker({
   disabled?: boolean
   /** Shorter scroll areas when used in the compare sidebar */
   compactLists?: boolean
+  /** When false, stock tab and list are hidden (DSE list not loaded or empty). */
+  stocksAvailable: boolean
+  /** Shown in the notice when `stocksAvailable` is false. */
+  stocksUnavailableHint: string
 }) {
   const listMaxH = compactLists ? "max-h-40" : "max-h-64"
+  const panelKind: SideKind = stocksAvailable && kind === "stock" ? "stock" : "fund"
   const filteredStocks = useMemo(() => {
     const t = stockQuery.trim().toLowerCase()
     const base = t
@@ -213,24 +220,30 @@ function SidePicker({
       )}
     >
       <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <div className="mb-3 flex gap-1 rounded-lg border border-border/60 bg-muted/30 p-0.5">
-        {(["stock", "fund"] as const).map((k) => (
-          <button
-            key={k}
-            type="button"
-            disabled={disabled}
-            onClick={() => onKind(k)}
-            className={cn(
-              "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
-              kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {k === "stock" ? "Stock" : "Fund / ETF"}
-          </button>
-        ))}
-      </div>
+      {stocksAvailable ? (
+        <div className="mb-3 flex gap-1 rounded-lg border border-border/60 bg-muted/30 p-0.5">
+          {(["stock", "fund"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              disabled={disabled}
+              onClick={() => onKind(k)}
+              className={cn(
+                "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                kind === k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {k === "stock" ? "Stock" : "Fund / ETF"}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="mb-3 rounded-md border border-border/60 bg-muted/20 px-2.5 py-2 text-[11px] leading-snug text-muted-foreground">
+          {stocksUnavailableHint}
+        </p>
+      )}
 
-      {kind === "stock" ? (
+      {panelKind === "stock" ? (
         <div className="space-y-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -336,6 +349,10 @@ export default function ComparePageClient() {
   const [stocks, setStocks] = useState<StockRow[]>([])
   const [stocksLoading, setStocksLoading] = useState(true)
   const [stocksError, setStocksError] = useState<string | null>(null)
+  /** Matches stocks dashboard: live list failed with no rows (or HTTP error). */
+  const [marketOutage, setMarketOutage] = useState(false)
+  const [indicesOutage, setIndicesOutage] = useState(false)
+  const [topMoversOutage, setTopMoversOutage] = useState(false)
 
   const [leftKind, setLeftKind] = useState<SideKind>("stock")
   const [rightKind, setRightKind] = useState<SideKind>("fund")
@@ -413,24 +430,89 @@ export default function ComparePageClient() {
     setStocksError(null)
     try {
       const res = await fetch("/api/market/stocks")
+      if (!res.ok) {
+        setStocksError(`Could not load stock list (${res.status}).`)
+        setMarketOutage(true)
+        setStocks([])
+        return
+      }
       const json = await res.json()
       const rows: StockRow[] = Array.isArray(json.data) ? json.data : []
+      const outage = Boolean(json.outage) || json.source === "unavailable"
       setStocks(rows)
+      setMarketOutage(outage && rows.length === 0)
       if (rows.length > 0) {
+        setMarketOutage(false)
+        setStocksError(null)
         setLeftStock((s) => (rows.some((r) => r.symbol === s) ? s : rows[0].symbol))
         setRightStock((s) => (rows.some((r) => r.symbol === s) ? s : rows[0].symbol))
       }
     } catch {
       setStocksError("Could not load stock list.")
+      setMarketOutage(true)
       setStocks([])
     } finally {
       setStocksLoading(false)
     }
   }, [])
 
+  const fetchCompareIndices = useCallback(async () => {
+    try {
+      const res = await fetch("/api/market/indices")
+      if (!res.ok) {
+        setIndicesOutage(true)
+        return
+      }
+      const payload = await res.json()
+      setIndicesOutage(Boolean(payload?.outage))
+    } catch {
+      setIndicesOutage(true)
+    }
+  }, [])
+
+  const fetchCompareTopMovers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/market/top-movers")
+      if (!res.ok) {
+        setTopMoversOutage(true)
+        return
+      }
+      const payload = await res.json()
+      setTopMoversOutage(Boolean(payload?.outage))
+    } catch {
+      setTopMoversOutage(true)
+    }
+  }, [])
+
+  const refreshCompareMarket = useCallback(async () => {
+    await Promise.all([loadStocks(), fetchCompareIndices(), fetchCompareTopMovers()])
+  }, [loadStocks, fetchCompareIndices, fetchCompareTopMovers])
+
   useEffect(() => {
-    loadStocks()
-  }, [loadStocks])
+    void refreshCompareMarket()
+  }, [refreshCompareMarket])
+
+  /** Same condition as stocks dashboard `showMarketDowntime` — stock charts off there ⇒ stock side off here. */
+  const compareStocksDashboardGraphsDown =
+    (stocks.length === 0 && (marketOutage || stocksError != null)) ||
+    indicesOutage ||
+    topMoversOutage
+
+  const dseStocksAvailable =
+    !stocksLoading && stocks.length > 0 && !compareStocksDashboardGraphsDown
+
+  const stockSideUnavailableHint = stocksLoading
+    ? "Loading DSE market data…"
+    : compareStocksDashboardGraphsDown && stocks.length > 0
+      ? "DSE market feeds are unavailable. Stock comparison is off — compare funds below, or refresh."
+      : "DSE stock list isn’t available. Compare funds below, or refresh when the feed is back."
+
+  useEffect(() => {
+    if (!dseStocksAvailable) {
+      setLeftKind((k) => (k === "stock" ? "fund" : k))
+      setRightKind((k) => (k === "stock" ? "fund" : k))
+    }
+  }, [dseStocksAvailable])
 
   useEffect(() => {
     const key = `${leftKind}:${leftKind === "stock" ? leftStock : leftFund}`
@@ -442,6 +524,11 @@ export default function ComparePageClient() {
     setLeftFundMeta(leftKind === "fund" ? getFundMeta(leftFund) : null)
 
     const run = async () => {
+      if (leftKind === "stock" && !dseStocksAvailable) {
+        setLeftHistory([])
+        setLeftLoading(false)
+        return
+      }
       try {
         if (leftKind === "stock") {
           const sym = leftStock.trim().toUpperCase()
@@ -492,7 +579,7 @@ export default function ComparePageClient() {
       }
     }
     void run()
-  }, [leftKind, leftStock, leftFund])
+  }, [leftKind, leftStock, leftFund, dseStocksAvailable])
 
   useEffect(() => {
     const key = `${rightKind}:${rightKind === "stock" ? rightStock : rightFund}`
@@ -504,6 +591,11 @@ export default function ComparePageClient() {
     setRightFundMeta(rightKind === "fund" ? getFundMeta(rightFund) : null)
 
     const run = async () => {
+      if (rightKind === "stock" && !dseStocksAvailable) {
+        setRightHistory([])
+        setRightLoading(false)
+        return
+      }
       try {
         if (rightKind === "stock") {
           const sym = rightStock.trim().toUpperCase()
@@ -554,31 +646,31 @@ export default function ComparePageClient() {
       }
     }
     void run()
-  }, [rightKind, rightStock, rightFund])
+  }, [rightKind, rightStock, rightFund, dseStocksAvailable])
 
   const leftStockLive = useMemo(() => {
-    if (leftKind !== "stock") return null
+    if (leftKind !== "stock" || !dseStocksAvailable) return null
     return stocks.find((s) => s.symbol === leftStock) ?? null
-  }, [leftKind, leftStock, stocks])
+  }, [leftKind, leftStock, stocks, dseStocksAvailable])
 
   const rightStockLive = useMemo(() => {
-    if (rightKind !== "stock") return null
+    if (rightKind !== "stock" || !dseStocksAvailable) return null
     return stocks.find((s) => s.symbol === rightStock) ?? null
-  }, [rightKind, rightStock, stocks])
+  }, [rightKind, rightStock, stocks, dseStocksAvailable])
 
   const leftStockAnalytics = useMemo(() => {
-    if (leftKind !== "stock" || leftHistory.length === 0) return null
+    if (leftKind !== "stock" || !dseStocksAvailable || leftHistory.length === 0) return null
     const asc = historyToAscending(leftHistory)
     const enriched = addMovingAverages(asc)
     return computeStockPeriodAnalytics(enriched, period)
-  }, [leftKind, leftHistory, period])
+  }, [leftKind, leftHistory, period, dseStocksAvailable])
 
   const rightStockAnalytics = useMemo(() => {
-    if (rightKind !== "stock" || rightHistory.length === 0) return null
+    if (rightKind !== "stock" || !dseStocksAvailable || rightHistory.length === 0) return null
     const asc = historyToAscending(rightHistory)
     const enriched = addMovingAverages(asc)
     return computeStockPeriodAnalytics(enriched, period)
-  }, [rightKind, rightHistory, period])
+  }, [rightKind, rightHistory, period, dseStocksAvailable])
 
   const leftFundAsc = useMemo(
     () => (leftKind === "fund" ? fundRowsAscending(leftFundRows, leftFundMeta) : []),
@@ -601,14 +693,14 @@ export default function ComparePageClient() {
 
   const chartRemountKey = useMemo(
     () =>
-      `${leftKind}:${leftKind === "stock" ? leftStock : leftFund}|${rightKind}:${rightKind === "stock" ? rightStock : rightFund}|${period}`,
-    [leftKind, leftStock, leftFund, rightKind, rightStock, rightFund, period],
+      `${dseStocksAvailable ? "dse" : "nodse"}|${leftKind}:${leftKind === "stock" ? leftStock : leftFund}|${rightKind}:${rightKind === "stock" ? rightStock : rightFund}|${period}`,
+    [dseStocksAvailable, leftKind, leftStock, leftFund, rightKind, rightStock, rightFund, period],
   )
 
   const chartSeries = useMemo(() => {
     const series: { name: string; data: { x: number; y: number }[] }[] = []
 
-    if (leftKind === "stock" && leftHistory.length > 0) {
+    if (leftKind === "stock" && dseStocksAvailable && leftHistory.length > 0) {
       const asc = addMovingAverages(historyToAscending(leftHistory))
       const slice = filterStockHistoryByPeriod(asc, period)
       const pts = normalizedFromCloses(slice)
@@ -635,7 +727,7 @@ export default function ComparePageClient() {
       }
     }
 
-    if (rightKind === "stock" && rightHistory.length > 0) {
+    if (rightKind === "stock" && dseStocksAvailable && rightHistory.length > 0) {
       const asc = addMovingAverages(historyToAscending(rightHistory))
       const slice = filterStockHistoryByPeriod(asc, period)
       const pts = normalizedFromCloses(slice)
@@ -679,6 +771,7 @@ export default function ComparePageClient() {
     leftStockLive,
     rightStockLive,
     period,
+    dseStocksAvailable,
   ])
 
   const apexOptions = useMemo<ApexOptions>(
@@ -710,9 +803,13 @@ export default function ComparePageClient() {
   )
 
   const leftTitle =
-    leftKind === "stock" ? leftStock : (leftFundMeta?.shortLabel ?? leftFund)
+    leftKind === "stock" && dseStocksAvailable ? leftStock : (leftFundMeta?.shortLabel ?? leftFund)
   const rightTitle =
-    rightKind === "stock" ? rightStock : (rightFundMeta?.shortLabel ?? rightFund)
+    rightKind === "stock" && dseStocksAvailable ? rightStock : (rightFundMeta?.shortLabel ?? rightFund)
+
+  /** Stock metrics columns only when DSE gate allows (matches Stocks dashboard graph availability). */
+  const leftUiKind: SideKind = leftKind === "stock" && dseStocksAvailable ? "stock" : "fund"
+  const rightUiKind: SideKind = rightKind === "stock" && dseStocksAvailable ? "stock" : "fund"
 
   const busy = stocksLoading || leftLoading || rightLoading
 
@@ -724,9 +821,9 @@ export default function ComparePageClient() {
           variant="outline"
           size="icon"
           className="h-8 w-8 shrink-0"
-          onClick={() => loadStocks()}
+          onClick={() => void refreshCompareMarket()}
           disabled={stocksLoading}
-          aria-label="Refresh market list"
+          aria-label="Refresh market data"
         >
           <RefreshCw className={cn("h-3.5 w-3.5", stocksLoading && "animate-spin")} />
         </Button>
@@ -760,6 +857,15 @@ export default function ComparePageClient() {
         {stocksError && (
           <p className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
             {stocksError}
+          </p>
+        )}
+        {compareStocksDashboardGraphsDown && stocks.length > 0 && !stocksError && (
+          <p
+            className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-950 dark:text-amber-100"
+            role="status"
+          >
+            Live DSE feeds are unavailable. Stock comparison is
+            paused; fund comparison still works.
           </p>
         )}
 
@@ -872,12 +978,12 @@ export default function ComparePageClient() {
                   <span
                     className={cn(
                       "ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                      leftKind === "stock"
+                      leftKind === "stock" && dseStocksAvailable
                         ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
                         : "bg-violet-500/10 text-violet-600 dark:text-violet-400",
                     )}
                   >
-                    {leftKind === "stock" ? "Stock" : "Fund"}
+                    {leftKind === "stock" && dseStocksAvailable ? "Stock" : "Fund"}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 px-3 py-2">
@@ -888,12 +994,12 @@ export default function ComparePageClient() {
                   <span
                     className={cn(
                       "ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                      rightKind === "stock"
+                      rightKind === "stock" && dseStocksAvailable
                         ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
                         : "bg-violet-500/10 text-violet-600 dark:text-violet-400",
                     )}
                   >
-                    {rightKind === "stock" ? "Stock" : "Fund"}
+                    {rightKind === "stock" && dseStocksAvailable ? "Stock" : "Fund"}
                   </span>
                 </div>
               </div>
@@ -912,8 +1018,9 @@ export default function ComparePageClient() {
               onStockQuery={setLeftStockQ}
               fundQuery={leftFundQ}
               onFundQuery={setLeftFundQ}
-              disabled={stocksLoading && stocks.length === 0}
               compactLists
+              stocksAvailable={dseStocksAvailable}
+              stocksUnavailableHint={stockSideUnavailableHint}
             />
             <SidePicker
               label="Instrument B"
@@ -928,8 +1035,9 @@ export default function ComparePageClient() {
               onStockQuery={setRightStockQ}
               fundQuery={rightFundQ}
               onFundQuery={setRightFundQ}
-              disabled={stocksLoading && stocks.length === 0}
               compactLists
+              stocksAvailable={dseStocksAvailable}
+              stocksUnavailableHint={stockSideUnavailableHint}
             />
 
             {(leftError || rightError) && (
@@ -1003,43 +1111,43 @@ export default function ComparePageClient() {
               <tbody className="divide-y divide-border/40">
                 <MetricRow
                   label="Total return"
-                  a={leftKind === "stock" ? leftStockAnalytics?.totalReturnPct : leftFundAnalytics?.totalReturnPct}
-                  b={rightKind === "stock" ? rightStockAnalytics?.totalReturnPct : rightFundAnalytics?.totalReturnPct}
+                  a={leftUiKind === "stock" ? leftStockAnalytics?.totalReturnPct : leftFundAnalytics?.totalReturnPct}
+                  b={rightUiKind === "stock" ? rightStockAnalytics?.totalReturnPct : rightFundAnalytics?.totalReturnPct}
                 />
                 <MetricRow
                   label="Annualized return"
-                  a={leftKind === "stock" ? leftStockAnalytics?.annualizedReturnPct : leftFundAnalytics?.annualizedReturnPct}
-                  b={rightKind === "stock" ? rightStockAnalytics?.annualizedReturnPct : rightFundAnalytics?.annualizedReturnPct}
+                  a={leftUiKind === "stock" ? leftStockAnalytics?.annualizedReturnPct : leftFundAnalytics?.annualizedReturnPct}
+                  b={rightUiKind === "stock" ? rightStockAnalytics?.annualizedReturnPct : rightFundAnalytics?.annualizedReturnPct}
                 />
                 <MetricRow
                   label="Volatility (ann.)"
-                  a={leftKind === "stock" ? leftStockAnalytics?.volatilityAnnualizedPct : leftFundAnalytics?.volatilityAnnualizedPct}
-                  b={rightKind === "stock" ? rightStockAnalytics?.volatilityAnnualizedPct : rightFundAnalytics?.volatilityAnnualizedPct}
+                  a={leftUiKind === "stock" ? leftStockAnalytics?.volatilityAnnualizedPct : leftFundAnalytics?.volatilityAnnualizedPct}
+                  b={rightUiKind === "stock" ? rightStockAnalytics?.volatilityAnnualizedPct : rightFundAnalytics?.volatilityAnnualizedPct}
                 />
                 <MetricRow
                   label="Max drawdown"
-                  a={leftKind === "stock" ? leftStockAnalytics?.maxDrawdownPct : leftFundAnalytics?.maxDrawdownPct}
-                  b={rightKind === "stock" ? rightStockAnalytics?.maxDrawdownPct : rightFundAnalytics?.maxDrawdownPct}
+                  a={leftUiKind === "stock" ? leftStockAnalytics?.maxDrawdownPct : leftFundAnalytics?.maxDrawdownPct}
+                  b={rightUiKind === "stock" ? rightStockAnalytics?.maxDrawdownPct : rightFundAnalytics?.maxDrawdownPct}
                 />
                 <MetricRow
                   label="Best day"
-                  a={leftKind === "stock" ? leftStockAnalytics?.bestDayPct : leftFundAnalytics?.bestDayPct}
-                  b={rightKind === "stock" ? rightStockAnalytics?.bestDayPct : rightFundAnalytics?.bestDayPct}
+                  a={leftUiKind === "stock" ? leftStockAnalytics?.bestDayPct : leftFundAnalytics?.bestDayPct}
+                  b={rightUiKind === "stock" ? rightStockAnalytics?.bestDayPct : rightFundAnalytics?.bestDayPct}
                 />
                 <MetricRow
                   label="Worst day"
-                  a={leftKind === "stock" ? leftStockAnalytics?.worstDayPct : leftFundAnalytics?.worstDayPct}
-                  b={rightKind === "stock" ? rightStockAnalytics?.worstDayPct : rightFundAnalytics?.worstDayPct}
+                  a={leftUiKind === "stock" ? leftStockAnalytics?.worstDayPct : leftFundAnalytics?.worstDayPct}
+                  b={rightUiKind === "stock" ? rightStockAnalytics?.worstDayPct : rightFundAnalytics?.worstDayPct}
                 />
                 <tr className="bg-muted/20">
                   <td className="px-4 py-2 text-xs text-muted-foreground" colSpan={3}>
                     Observations:{" "}
                     <strong className="text-foreground">
-                      {leftKind === "stock" ? (leftStockAnalytics?.observations ?? "—") : (leftFundAnalytics?.observations ?? "—")}
+                      {leftUiKind === "stock" ? (leftStockAnalytics?.observations ?? "—") : (leftFundAnalytics?.observations ?? "—")}
                     </strong>
                     {" vs "}
                     <strong className="text-foreground">
-                      {rightKind === "stock" ? (rightStockAnalytics?.observations ?? "—") : (rightFundAnalytics?.observations ?? "—")}
+                      {rightUiKind === "stock" ? (rightStockAnalytics?.observations ?? "—") : (rightFundAnalytics?.observations ?? "—")}
                     </strong>
                   </td>
                 </tr>
@@ -1078,17 +1186,17 @@ export default function ComparePageClient() {
                 {[
                   {
                     label: "Type",
-                    left: leftKind === "stock" ? "Listed stock (DSE)" : "Fund / ETF",
-                    right: rightKind === "stock" ? "Listed stock (DSE)" : "Fund / ETF",
+                    left: leftUiKind === "stock" ? "Listed stock (DSE)" : "Fund / ETF",
+                    right: rightUiKind === "stock" ? "Listed stock (DSE)" : "Fund / ETF",
                   },
                   {
                     label: "Latest level",
-                    left: leftKind === "stock"
+                    left: leftUiKind === "stock"
                       ? leftStockLive ? formatPriceTzs(leftStockLive.price) : "—"
                       : leftFundAsc.length > 0 && leftFundMeta
                         ? formatFundMoney(leftFundAsc[leftFundAsc.length - 1].navPerUnit, leftFundMeta.currency)
                         : "—",
-                    right: rightKind === "stock"
+                    right: rightUiKind === "stock"
                       ? rightStockLive ? formatPriceTzs(rightStockLive.price) : "—"
                       : rightFundAsc.length > 0 && rightFundMeta
                         ? formatFundMoney(rightFundAsc[rightFundAsc.length - 1].navPerUnit, rightFundMeta.currency)
@@ -1096,29 +1204,29 @@ export default function ComparePageClient() {
                   },
                   {
                     label: "Session change",
-                    left: leftKind === "stock"
+                    left: leftUiKind === "stock"
                       ? leftStockLive ? formatPct(leftStockLive.changePercent) : "—"
                       : leftFundAnalytics?.totalReturnPct != null ? `Window: ${formatPct(leftFundAnalytics.totalReturnPct)}` : "—",
-                    right: rightKind === "stock"
+                    right: rightUiKind === "stock"
                       ? rightStockLive ? formatPct(rightStockLive.changePercent) : "—"
                       : rightFundAnalytics?.totalReturnPct != null ? `Window: ${formatPct(rightFundAnalytics.totalReturnPct)}` : "—",
                   },
                   {
                     label: "Market cap",
-                    left: leftKind === "stock" && leftStockLive?.marketCap != null ? formatCompact(leftStockLive.marketCap) : "—",
-                    right: rightKind === "stock" && rightStockLive?.marketCap != null ? formatCompact(rightStockLive.marketCap) : "—",
+                    left: leftUiKind === "stock" && leftStockLive?.marketCap != null ? formatCompact(leftStockLive.marketCap) : "—",
+                    right: rightUiKind === "stock" && rightStockLive?.marketCap != null ? formatCompact(rightStockLive.marketCap) : "—",
                   },
                   {
                     label: "Spread vs NAV",
-                    left: leftKind === "fund" ? formatPct(leftFundAnalytics?.latestSpreadPct) : "—",
-                    right: rightKind === "fund" ? formatPct(rightFundAnalytics?.latestSpreadPct) : "—",
+                    left: leftUiKind === "fund" ? formatPct(leftFundAnalytics?.latestSpreadPct ?? null) : "—",
+                    right: rightUiKind === "fund" ? formatPct(rightFundAnalytics?.latestSpreadPct ?? null) : "—",
                   },
                   {
                     label: "Bid / Ask",
-                    left: leftKind === "stock" && leftStockLive?.bestBidPrice != null && leftStockLive?.bestOfferPrice != null
+                    left: leftUiKind === "stock" && leftStockLive?.bestBidPrice != null && leftStockLive?.bestOfferPrice != null
                       ? `${formatPriceTzs(leftStockLive.bestBidPrice)} / ${formatPriceTzs(leftStockLive.bestOfferPrice)}`
                       : "—",
-                    right: rightKind === "stock" && rightStockLive?.bestBidPrice != null && rightStockLive?.bestOfferPrice != null
+                    right: rightUiKind === "stock" && rightStockLive?.bestBidPrice != null && rightStockLive?.bestOfferPrice != null
                       ? `${formatPriceTzs(rightStockLive.bestBidPrice)} / ${formatPriceTzs(rightStockLive.bestOfferPrice)}`
                       : "—",
                   },
@@ -1164,33 +1272,33 @@ export default function ComparePageClient() {
                 {[
                   {
                     label: "Name",
-                    left: leftKind === "stock" ? (leftStockLive?.name ?? leftStock) : (leftFundMeta?.label ?? leftFund),
-                    right: rightKind === "stock" ? (rightStockLive?.name ?? rightStock) : (rightFundMeta?.label ?? rightFund),
+                    left: leftUiKind === "stock" ? (leftStockLive?.name ?? leftStock) : (leftFundMeta?.label ?? leftFund),
+                    right: rightUiKind === "stock" ? (rightStockLive?.name ?? rightStock) : (rightFundMeta?.label ?? rightFund),
                   },
                   {
                     label: "Provider / Venue",
-                    left: leftKind === "stock" ? "Dar es Salaam Stock Exchange" : leftFundMeta ? fundProviderLabel(leftFundMeta) : "—",
-                    right: rightKind === "stock" ? "Dar es Salaam Stock Exchange" : rightFundMeta ? fundProviderLabel(rightFundMeta) : "—",
+                    left: leftUiKind === "stock" ? "Dar es Salaam Stock Exchange" : leftFundMeta ? fundProviderLabel(leftFundMeta) : "—",
+                    right: rightUiKind === "stock" ? "Dar es Salaam Stock Exchange" : rightFundMeta ? fundProviderLabel(rightFundMeta) : "—",
                   },
                   {
                     label: "Category",
-                    left: leftKind === "stock" ? "Equity (listed)" : (leftFundMeta?.category ?? "—"),
-                    right: rightKind === "stock" ? "Equity (listed)" : (rightFundMeta?.category ?? "—"),
+                    left: leftUiKind === "stock" ? "Equity (listed)" : (leftFundMeta?.category ?? "—"),
+                    right: rightUiKind === "stock" ? "Equity (listed)" : (rightFundMeta?.category ?? "—"),
                   },
                   {
                     label: "Currency",
-                    left: leftKind === "stock" ? "TZS" : (leftFundMeta?.currency ?? "—"),
-                    right: rightKind === "stock" ? "TZS" : (rightFundMeta?.currency ?? "—"),
+                    left: leftUiKind === "stock" ? "TZS" : (leftFundMeta?.currency ?? "—"),
+                    right: rightUiKind === "stock" ? "TZS" : (rightFundMeta?.currency ?? "—"),
                   },
                   {
                     label: "Avg volume (window)",
-                    left: leftKind === "stock" && leftStockAnalytics?.avgVolume != null ? formatCompact(leftStockAnalytics.avgVolume) : "—",
-                    right: rightKind === "stock" && rightStockAnalytics?.avgVolume != null ? formatCompact(rightStockAnalytics.avgVolume) : "—",
+                    left: leftUiKind === "stock" && leftStockAnalytics?.avgVolume != null ? formatCompact(leftStockAnalytics.avgVolume) : "—",
+                    right: rightUiKind === "stock" && rightStockAnalytics?.avgVolume != null ? formatCompact(rightStockAnalytics.avgVolume) : "—",
                   },
                   {
                     label: "Volume vs average",
-                    left: leftKind === "stock" ? formatPct(leftStockAnalytics?.volumeVsAvgPct) : "—",
-                    right: rightKind === "stock" ? formatPct(rightStockAnalytics?.volumeVsAvgPct) : "—",
+                    left: leftUiKind === "stock" ? formatPct(leftStockAnalytics?.volumeVsAvgPct ?? null) : "—",
+                    right: rightUiKind === "stock" ? formatPct(rightStockAnalytics?.volumeVsAvgPct ?? null) : "—",
                   },
                 ].map(({ label, left, right }) => (
                   <tr key={label} className="hover:bg-muted/20 transition-colors">
@@ -1202,10 +1310,10 @@ export default function ComparePageClient() {
                 <tr className="hover:bg-muted/20 transition-colors">
                   <td className="px-4 py-2.5 align-top text-xs text-muted-foreground">MA Trend</td>
                   <td className="px-4 py-2.5 text-right align-top text-xs leading-relaxed">
-                    {leftKind === "stock" ? leftStockAnalytics?.maTrendNote ?? "—" : "N/A (fund)"}
+                    {leftUiKind === "stock" ? leftStockAnalytics?.maTrendNote ?? "—" : "N/A (fund)"}
                   </td>
                   <td className="px-4 py-2.5 text-right align-top text-xs leading-relaxed">
-                    {rightKind === "stock" ? rightStockAnalytics?.maTrendNote ?? "—" : "N/A (fund)"}
+                    {rightUiKind === "stock" ? rightStockAnalytics?.maTrendNote ?? "—" : "N/A (fund)"}
                   </td>
                 </tr>
               </tbody>

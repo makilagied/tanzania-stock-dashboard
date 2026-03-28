@@ -35,7 +35,12 @@ export async function GET() {
     )
   } catch {
     return NextResponse.json(
-      { success: false, data: [], error: "Unable to fetch top movers right now." },
+      {
+        success: false,
+        data: [],
+        error: "Unable to fetch top movers right now.",
+        outage: true,
+      },
       { status: 200, headers: { "Cache-Control": "no-store" } },
     )
   }

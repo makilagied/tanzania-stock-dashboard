@@ -4,27 +4,11 @@ import {
   type FundAnalyticsPeriod,
   getAnalyticsWindowStart,
 } from "@/lib/fund-analytics"
+import { parseStockHistoryDateTs } from "@/lib/history-date"
+
+export { parseStockHistoryDateTs }
 
 const MS_DAY = 86_400_000
-
-/** Parse history date strings (ISO, DD/MM/YYYY, etc.) to a stable UTC-noon timestamp for sorting/filtering. */
-export function parseStockHistoryDateTs(dateStr: string): number {
-  const s = String(dateStr ?? "").trim()
-  if (!s) return 0
-  const isoHead = s.slice(0, 10)
-  let ts = Date.parse(`${isoHead}T12:00:00Z`)
-  if (Number.isFinite(ts)) return ts
-  const m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/.exec(s)
-  if (m) {
-    const day = Number(m[1])
-    const month = Number(m[2]) - 1
-    const year = Number(m[3])
-    const dt = new Date(Date.UTC(year, month, day, 12, 0, 0))
-    return Number.isFinite(dt.getTime()) ? dt.getTime() : 0
-  }
-  ts = Date.parse(s)
-  return Number.isFinite(ts) ? ts : 0
-}
 
 export type StockHistoryRow = HistoricalPoint & { dateSort: number }
 
