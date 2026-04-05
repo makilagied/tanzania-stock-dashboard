@@ -122,8 +122,6 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   /** Live DSE feed failed and no server-side snapshot existed (or client could not reach API). */
   const [marketOutage, setMarketOutage] = useState(false)
-  const [indicesOutage, setIndicesOutage] = useState(false)
-  const [topMoversOutage, setTopMoversOutage] = useState(false)
   /** ISO timestamp when `stale` snapshot was written (from API). */
   const [staleFeedAt, setStaleFeedAt] = useState<string | null>(null)
   const [activeStock, setActiveStock] = useState<StockData | null>(null)
@@ -145,9 +143,8 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
 
   const selectedStock = stocks.find((s) => s.symbol === selectedSymbol) ?? null
 
-  /** Full-page DSE downtime when stocks cannot load or any primary market feed reports an outage. */
-  const showMarketDowntime =
-    (stocks.length === 0 && (marketOutage || error != null)) || indicesOutage || topMoversOutage
+  /** Full-page DSE downtime only when the stock list cannot be served (indices/movers may be empty without blocking). */
+  const showMarketDowntime = stocks.length === 0 && (marketOutage || error != null)
   const totalVolume = stocks.reduce((sum, s) => sum + s.volume, 0)
   const gainers = stocks.filter((s) => s.change > 0)
   const losers = stocks.filter((s) => s.change < 0)
@@ -476,16 +473,13 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
       const res = await fetch("/api/market/top-movers")
       if (!res.ok) {
         setTopMovers([])
-        setTopMoversOutage(true)
         return
       }
       const payload = await res.json()
       const data = Array.isArray(payload?.data) ? payload.data : []
       setTopMovers(data)
-      setTopMoversOutage(Boolean(payload?.outage))
     } catch {
       setTopMovers([])
-      setTopMoversOutage(true)
     }
   }
 
@@ -494,16 +488,13 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
       const res = await fetch("/api/market/indices")
       if (!res.ok) {
         setIndices([])
-        setIndicesOutage(true)
         return
       }
       const payload = await res.json()
       const data = Array.isArray(payload?.data) ? payload.data : []
       setIndices(data)
-      setIndicesOutage(Boolean(payload?.outage))
     } catch {
       setIndices([])
-      setIndicesOutage(true)
     }
   }
 
