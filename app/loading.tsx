@@ -15,8 +15,8 @@ export default function Loading() {
           />
         </div>
         <div>
-          <p className="font-medium">Loading market dashboard...</p>
-          <p className="text-xs text-muted-foreground">Syncing live prices and history</p>
+          <p className="text-sm font-medium leading-none">Loading...</p>
+          <p className="text-sm text-muted-foreground">Please wait while we load the content.</p>
         </div>
       </div>
     </div>

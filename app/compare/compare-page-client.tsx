@@ -349,10 +349,6 @@ export default function ComparePageClient() {
   const [stocks, setStocks] = useState<StockRow[]>([])
   const [stocksLoading, setStocksLoading] = useState(true)
   const [stocksError, setStocksError] = useState<string | null>(null)
-  /** Matches stocks dashboard: live list failed with no rows (or HTTP error). */
-  const [marketOutage, setMarketOutage] = useState(false)
-  const [indicesOutage, setIndicesOutage] = useState(false)
-  const [topMoversOutage, setTopMoversOutage] = useState(false)
 
   const [leftKind, setLeftKind] = useState<SideKind>("stock")
   const [rightKind, setRightKind] = useState<SideKind>("fund")
@@ -432,7 +428,6 @@ export default function ComparePageClient() {
       const res = await fetch("/api/market/stocks")
       if (!res.ok) {
         setStocksError(`Could not load stock list (${res.status}).`)
-        setMarketOutage(true)
         setStocks([])
         return
       }
@@ -440,72 +435,40 @@ export default function ComparePageClient() {
       const rows: StockRow[] = Array.isArray(json.data) ? json.data : []
       const outage = Boolean(json.outage) || json.source === "unavailable"
       setStocks(rows)
-      setMarketOutage(outage && rows.length === 0)
       if (rows.length > 0) {
-        setMarketOutage(false)
         setStocksError(null)
         setLeftStock((s) => (rows.some((r) => r.symbol === s) ? s : rows[0].symbol))
         setRightStock((s) => (rows.some((r) => r.symbol === s) ? s : rows[0].symbol))
+      } else {
+        setStocksError(
+          outage
+            ? typeof json.error === "string"
+              ? json.error
+              : "Could not load stock list."
+            : null,
+        )
       }
     } catch {
       setStocksError("Could not load stock list.")
-      setMarketOutage(true)
       setStocks([])
     } finally {
       setStocksLoading(false)
     }
   }, [])
 
-  const fetchCompareIndices = useCallback(async () => {
-    try {
-      const res = await fetch("/api/market/indices")
-      if (!res.ok) {
-        setIndicesOutage(true)
-        return
-      }
-      const payload = await res.json()
-      setIndicesOutage(Boolean(payload?.outage))
-    } catch {
-      setIndicesOutage(true)
-    }
-  }, [])
-
-  const fetchCompareTopMovers = useCallback(async () => {
-    try {
-      const res = await fetch("/api/market/top-movers")
-      if (!res.ok) {
-        setTopMoversOutage(true)
-        return
-      }
-      const payload = await res.json()
-      setTopMoversOutage(Boolean(payload?.outage))
-    } catch {
-      setTopMoversOutage(true)
-    }
-  }, [])
-
   const refreshCompareMarket = useCallback(async () => {
-    await Promise.all([loadStocks(), fetchCompareIndices(), fetchCompareTopMovers()])
-  }, [loadStocks, fetchCompareIndices, fetchCompareTopMovers])
+    await loadStocks()
+  }, [loadStocks])
 
   useEffect(() => {
     void refreshCompareMarket()
   }, [refreshCompareMarket])
 
-  /** Same condition as stocks dashboard `showMarketDowntime` — stock charts off there ⇒ stock side off here. */
-  const compareStocksDashboardGraphsDown =
-    (stocks.length === 0 && (marketOutage || stocksError != null)) ||
-    indicesOutage ||
-    topMoversOutage
-
-  const dseStocksAvailable =
-    !stocksLoading && stocks.length > 0 && !compareStocksDashboardGraphsDown
+  const dseStocksAvailable = !stocksLoading && stocks.length > 0
 
   const stockSideUnavailableHint = stocksLoading
     ? "Loading DSE market data…"
-    : compareStocksDashboardGraphsDown && stocks.length > 0
-      ? "DSE market feeds are unavailable. Stock comparison is off — compare funds below, or refresh."
-      : "DSE stock list isn’t available. Compare funds below, or refresh when the feed is back."
+    : "DSE stock list isn’t available. Compare funds below, or refresh when the feed is back."
 
   useEffect(() => {
     if (!dseStocksAvailable) {
@@ -857,15 +820,6 @@ export default function ComparePageClient() {
         {stocksError && (
           <p className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
             {stocksError}
-          </p>
-        )}
-        {compareStocksDashboardGraphsDown && stocks.length > 0 && !stocksError && (
-          <p
-            className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-950 dark:text-amber-100"
-            role="status"
-          >
-            Live DSE feeds are unavailable. Stock comparison is
-            paused; fund comparison still works.
           </p>
         )}
 
