@@ -21,7 +21,17 @@ export function SiteFooter() {
         </Link>
         <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground sm:justify-end">
           <span>
-            Built by <span className="font-semibold text-foreground">Erick D Makilagi</span>
+            Built by <span className="font-semibold text-foreground">
+              <a
+                  href="https://makilagied.vercel.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="transition-colors hover:text-primary"
+              >
+            Erick D Makilagi
+              </a>
+
+              </span>
           </span>
           <span className="hidden sm:inline">•</span>
           <a
