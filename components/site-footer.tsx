@@ -33,6 +33,15 @@ export function SiteFooter() {
 
               </span>
           </span>
+           <span className="hidden sm:inline">•</span>
+          <a
+            href="https://snippe.me/pay/makilagied"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-primary"
+          >
+            Buy me a coffee
+          </a>
           <span className="hidden sm:inline">•</span>
           <a
             href="https://github.com/makilagied"
@@ -51,15 +60,7 @@ export function SiteFooter() {
           >
             LinkedIn
           </a>
-          <span className="hidden sm:inline">•</span>
-          <a
-            href="https://snippe.me/pay/makilagied"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition-colors hover:text-primary"
-          >
-            Buy me a coffee
-          </a>
+         
         </div>
       </div>
     </footer>
