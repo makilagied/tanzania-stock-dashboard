@@ -437,3 +437,70 @@ select option {
   background: rgba(244, 63, 94, 0.25);
   animation-delay: 0.6s;
 }
+
+/* Jolene FAB — soft attention without being noisy */
+@keyframes fabGlow {
+  0%,
+  100% {
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.12),
+      0 0 0 0 color-mix(in oklab, var(--chart-3) 42%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 6px 20px rgba(0, 0, 0, 0.14),
+      0 0 0 10px transparent;
+  }
+}
+
+@keyframes fabAvatarBreath {
+  0%,
+  100%,
+  70% {
+    transform: scale(1);
+  }
+  78% {
+    transform: scale(1.06);
+  }
+  86% {
+    transform: scale(1);
+  }
+}
+
+@keyframes fabHintPop {
+  0%,
+  82%,
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  86% {
+    transform: translateY(-5px) scale(1.05);
+    opacity: 1;
+  }
+  92% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.fab-assistant-glow {
+  animation: fabGlow 2.8s ease-in-out infinite;
+}
+
+.fab-assistant-avatar {
+  animation: fabAvatarBreath 4s ease-in-out infinite;
+}
+
+.fab-assistant-hint {
+  animation: fabHintPop 4.8s ease-in-out infinite;
+  transform-origin: 100% 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fab-assistant-glow,
+  .fab-assistant-avatar,
+  .fab-assistant-hint {
+    animation: none !important;
+  }
+}

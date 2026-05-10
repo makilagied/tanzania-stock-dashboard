@@ -1,7 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import { MarketDowntime } from "@/components/market-downtime"
 import { SiteFooter } from "@/components/site-footer"
@@ -29,8 +29,11 @@ import {
   TrendingUp,
   X,
 } from "lucide-react"
+import { useChartAssistantPage } from "@/components/chart-assistant-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import type { ChartDashboardPatch } from "@/lib/ai-chart-agent-tools"
+import { consumeAssistantNavigationForPath } from "@/lib/assistant-nav-storage"
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false })
 
@@ -614,6 +617,38 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
   useEffect(() => {
     if (selectedStock?.id) fetchSelectedOrderBook(selectedStock.id)
   }, [selectedStock?.id])
+
+  const { register: registerChartAssistant, unregister: unregisterChartAssistant } = useChartAssistantPage()
+  const chartAssistantPageContext = useMemo(
+    () => ({
+      route: "stocks" as const,
+      selectedSymbol,
+      stockPeriod,
+      chartType,
+      staleFeedAt,
+    }),
+    [selectedSymbol, stockPeriod, chartType, staleFeedAt],
+  )
+  const applyChartAssistantPatch = useCallback((patch: ChartDashboardPatch) => {
+    if (patch.symbol) setSelectedSymbol(patch.symbol)
+    if (patch.period) setStockPeriod(patch.period)
+    if (patch.chartType) setChartType(patch.chartType)
+  }, [])
+  useEffect(() => {
+    registerChartAssistant({
+      pageContext: chartAssistantPageContext,
+      onApplyDashboardPatch: applyChartAssistantPatch,
+    })
+    return () => unregisterChartAssistant()
+  }, [registerChartAssistant, unregisterChartAssistant, chartAssistantPageContext, applyChartAssistantPatch])
+
+  useEffect(() => {
+    const patch = consumeAssistantNavigationForPath("/")
+    if (!patch) return
+    if (patch.symbol) setSelectedSymbol(patch.symbol)
+    if (patch.period) setStockPeriod(patch.period)
+    if (patch.chartType) setChartType(patch.chartType)
+  }, [])
 
   return (
     <div className="min-h-screen bg-background font-sans">

@@ -1,3 +1,4 @@
+import { parseInclusiveYmdRange } from "@/lib/chart-analytics-range"
 import type { ITrustFundRecord } from "@/lib/itrust-funds"
 
 /** Period presets: chart + analytics use the same selection (includes full history). */
@@ -116,29 +117,23 @@ function stdSample(xs: number[]) {
   return Math.sqrt(v)
 }
 
-/**
- * `rows` must be sorted ascending by `dateSort` (oldest → newest).
- */
-export function computeFundPeriodAnalytics(
-  rowsAscending: ITrustFundRecord[],
+function computeFundPeriodAnalyticsFromSlice(
+  slice: ITrustFundRecord[],
   period: FundAnalyticsPeriod,
+  rangeLabel: string,
+  latestForSpread: ITrustFundRecord,
 ): FundPeriodAnalytics | null {
-  if (rowsAscending.length === 0) return null
+  if (slice.length === 0) return null
 
-  const latest = rowsAscending[rowsAscending.length - 1]
-  const latestTs = latest.dateSort
-  const windowStart = getAnalyticsWindowStart(period, latestTs)
-
-  const slice = rowsAscending.filter((r) => r.dateSort >= windowStart)
   if (slice.length < 2) {
     return {
       period,
-      rangeLabel: ANALYTICS_PERIOD_LABELS[period],
+      rangeLabel,
       startDate: slice[0]?.date ?? null,
-      endDate: latest.date,
+      endDate: latestForSpread.date,
       observations: slice.length,
       navStart: slice[0]?.navPerUnit ?? null,
-      navEnd: latest.navPerUnit,
+      navEnd: latestForSpread.navPerUnit,
       totalReturnPct: null,
       annualizedReturnPct: null,
       volatilityAnnualizedPct: null,
@@ -148,8 +143,10 @@ export function computeFundPeriodAnalytics(
       periodHighNav: slice[0]?.navPerUnit ?? null,
       periodLowNav: slice[0]?.navPerUnit ?? null,
       latestSpreadPct:
-        latest.navPerUnit > 0
-          ? ((latest.salePricePerUnit - latest.repurchasePricePerUnit) / latest.navPerUnit) * 100
+        latestForSpread.navPerUnit > 0
+          ? ((latestForSpread.salePricePerUnit - latestForSpread.repurchasePricePerUnit) /
+              latestForSpread.navPerUnit) *
+            100
           : null,
     }
   }
@@ -203,13 +200,15 @@ export function computeFundPeriodAnalytics(
   }
 
   const latestSpreadPct =
-    latest.navPerUnit > 0
-      ? ((latest.salePricePerUnit - latest.repurchasePricePerUnit) / latest.navPerUnit) * 100
+    latestForSpread.navPerUnit > 0
+      ? ((latestForSpread.salePricePerUnit - latestForSpread.repurchasePricePerUnit) /
+          latestForSpread.navPerUnit) *
+        100
       : null
 
   return {
     period,
-    rangeLabel: ANALYTICS_PERIOD_LABELS[period],
+    rangeLabel,
     startDate: start.date,
     endDate: end.date,
     observations: slice.length,
@@ -225,4 +224,34 @@ export function computeFundPeriodAnalytics(
     periodLowNav: periodLow,
     latestSpreadPct,
   }
+}
+
+/**
+ * `rows` must be sorted ascending by `dateSort` (oldest → newest).
+ */
+export function computeFundPeriodAnalytics(
+  rowsAscending: ITrustFundRecord[],
+  period: FundAnalyticsPeriod,
+): FundPeriodAnalytics | null {
+  if (rowsAscending.length === 0) return null
+
+  const latest = rowsAscending[rowsAscending.length - 1]
+  const latestTs = latest.dateSort
+  const windowStart = getAnalyticsWindowStart(period, latestTs)
+
+  const slice = rowsAscending.filter((r) => r.dateSort >= windowStart)
+  return computeFundPeriodAnalyticsFromSlice(slice, period, ANALYTICS_PERIOD_LABELS[period], latest)
+}
+
+/** Inclusive YYYY-MM-DD window on ascending NAV rows; `period` in the result is `"all"` with a custom `rangeLabel`. */
+export function computeFundPeriodAnalyticsForYmdRange(
+  rowsAscending: ITrustFundRecord[],
+  rangeStartYmd: string,
+  rangeEndYmd: string,
+): FundPeriodAnalytics | null {
+  const bounds = parseInclusiveYmdRange(rangeStartYmd, rangeEndYmd)
+  if (!bounds || rowsAscending.length === 0) return null
+  const latest = rowsAscending[rowsAscending.length - 1]
+  const slice = rowsAscending.filter((r) => r.dateSort >= bounds.startMs && r.dateSort <= bounds.endMs)
+  return computeFundPeriodAnalyticsFromSlice(slice, "all", bounds.label, latest)
 }

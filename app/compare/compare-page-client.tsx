@@ -13,6 +13,7 @@ import {
   Search,
   Sun,
 } from "lucide-react"
+import { useChartAssistantPage } from "@/components/chart-assistant-context"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
@@ -24,6 +25,9 @@ import {
   filterFundRowsByPeriod,
   type FundAnalyticsPeriod,
 } from "@/lib/fund-analytics"
+import type { ChartDashboardPatch } from "@/lib/ai-chart-agent-tools"
+import { resolveFundCatalogId } from "@/lib/fund-catalog-resolve"
+import { consumeAssistantNavigationForPath } from "@/lib/assistant-nav-storage"
 import { ALL_FUNDS, getFundMeta, type FundMeta } from "@/lib/funds-catalog"
 import type { ITrustFundRecord } from "@/lib/itrust-funds"
 import type { HistoricalPoint } from "@/lib/market-data"
@@ -273,7 +277,7 @@ function SidePicker({
                   type="button"
                   disabled={disabled}
                   onClick={() => {
-                    onStockSymbol(s.symbol)
+                    onStockSymbol(s.symbol.trim().toUpperCase())
                     onStockQuery("")
                   }}
                   className={cn(
@@ -470,12 +474,13 @@ export default function ComparePageClient() {
     ? "Loading DSE market data…"
     : "DSE stock list isn’t available. Compare funds below, or refresh when the feed is back."
 
+  /** Only after the DSE list finishes loading: if it is empty, stock mode is impossible — fall back to funds. */
   useEffect(() => {
-    if (!dseStocksAvailable) {
-      setLeftKind((k) => (k === "stock" ? "fund" : k))
-      setRightKind((k) => (k === "stock" ? "fund" : k))
-    }
-  }, [dseStocksAvailable])
+    if (stocksLoading) return
+    if (stocks.length > 0) return
+    setLeftKind((k) => (k === "stock" ? "fund" : k))
+    setRightKind((k) => (k === "stock" ? "fund" : k))
+  }, [stocksLoading, stocks.length])
 
   useEffect(() => {
     const key = `${leftKind}:${leftKind === "stock" ? leftStock : leftFund}`
@@ -775,6 +780,71 @@ export default function ComparePageClient() {
   const rightUiKind: SideKind = rightKind === "stock" && dseStocksAvailable ? "stock" : "fund"
 
   const busy = stocksLoading || leftLoading || rightLoading
+
+  const { register: registerChartAssistant, unregister: unregisterChartAssistant } = useChartAssistantPage()
+  const assistantPageContext = useMemo(
+    () => ({
+      route: "compare" as const,
+      dseStocksAvailable,
+      leftKind,
+      rightKind,
+      leftStock,
+      rightStock,
+      leftFund,
+      rightFund,
+      period,
+    }),
+    [
+      dseStocksAvailable,
+      leftKind,
+      rightKind,
+      leftStock,
+      rightStock,
+      leftFund,
+      rightFund,
+      period,
+    ],
+  )
+  const applyAssistantPatch = useCallback((patch: ChartDashboardPatch) => {
+    if (patch.leftKind === "stock" || patch.leftKind === "fund") setLeftKind(patch.leftKind)
+    if (patch.rightKind === "stock" || patch.rightKind === "fund") setRightKind(patch.rightKind)
+    if (patch.leftStock) setLeftStock(String(patch.leftStock).trim().toUpperCase())
+    if (patch.rightStock) setRightStock(String(patch.rightStock).trim().toUpperCase())
+    if (patch.leftFund) {
+      const id = resolveFundCatalogId(String(patch.leftFund))
+      if (id && getFundMeta(id)) setLeftFund(id)
+    }
+    if (patch.rightFund) {
+      const id = resolveFundCatalogId(String(patch.rightFund))
+      if (id && getFundMeta(id)) setRightFund(id)
+    }
+    if (patch.comparePeriod) setPeriod(patch.comparePeriod)
+  }, [])
+  useEffect(() => {
+    registerChartAssistant({
+      pageContext: assistantPageContext,
+      onApplyDashboardPatch: applyAssistantPatch,
+    })
+    return () => unregisterChartAssistant()
+  }, [registerChartAssistant, unregisterChartAssistant, assistantPageContext, applyAssistantPatch])
+
+  useEffect(() => {
+    const patch = consumeAssistantNavigationForPath("/compare")
+    if (!patch) return
+    if (patch.leftKind === "stock" || patch.leftKind === "fund") setLeftKind(patch.leftKind)
+    if (patch.rightKind === "stock" || patch.rightKind === "fund") setRightKind(patch.rightKind)
+    if (patch.leftStock) setLeftStock(String(patch.leftStock).trim().toUpperCase())
+    if (patch.rightStock) setRightStock(String(patch.rightStock).trim().toUpperCase())
+    if (patch.leftFund) {
+      const id = resolveFundCatalogId(String(patch.leftFund))
+      if (id && getFundMeta(id)) setLeftFund(id)
+    }
+    if (patch.rightFund) {
+      const id = resolveFundCatalogId(String(patch.rightFund))
+      if (id && getFundMeta(id)) setRightFund(id)
+    }
+    if (patch.comparePeriod) setPeriod(patch.comparePeriod)
+  }, [])
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

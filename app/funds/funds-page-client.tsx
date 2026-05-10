@@ -15,6 +15,10 @@ import {
   type FundAnalyticsPeriod,
 } from "@/lib/fund-analytics"
 import type { ITrustFundRecord } from "@/lib/itrust-funds"
+import { useChartAssistantPage } from "@/components/chart-assistant-context"
+import type { ChartDashboardPatch } from "@/lib/ai-chart-agent-tools"
+import { resolveFundCatalogId } from "@/lib/fund-catalog-resolve"
+import { consumeAssistantNavigationForPath } from "@/lib/assistant-nav-storage"
 import { ALL_FUNDS, type FundMeta } from "@/lib/funds-catalog"
 import { parseFlexibleDateTs } from "@/lib/date-parse"
 import { cn } from "@/lib/utils"
@@ -557,6 +561,41 @@ export default function FundsPageClient({ seoIntro }: { seoIntro?: ReactNode }) 
     latest && previous && previous.navPerUnit > 0
       ? ((latest.navPerUnit - previous.navPerUnit) / previous.navPerUnit) * 100
       : null
+
+  const { register: registerChartAssistant, unregister: unregisterChartAssistant } = useChartAssistantPage()
+  const assistantPageContext = useMemo(
+    () => ({
+      route: "funds" as const,
+      selectedId,
+      fundPeriod,
+      fundLabel: meta?.shortLabel ?? null,
+    }),
+    [selectedId, fundPeriod, meta?.shortLabel],
+  )
+  const applyAssistantPatch = useCallback((patch: ChartDashboardPatch) => {
+    if (patch.fundId) {
+      const id = resolveFundCatalogId(patch.fundId) ?? patch.fundId
+      if (ALL_FUNDS.some((f) => f.id === id)) setSelectedId(id)
+    }
+    if (patch.fundPeriod) setFundPeriod(patch.fundPeriod)
+  }, [])
+  useEffect(() => {
+    registerChartAssistant({
+      pageContext: assistantPageContext,
+      onApplyDashboardPatch: applyAssistantPatch,
+    })
+    return () => unregisterChartAssistant()
+  }, [registerChartAssistant, unregisterChartAssistant, assistantPageContext, applyAssistantPatch])
+
+  useEffect(() => {
+    const patch = consumeAssistantNavigationForPath("/funds")
+    if (!patch) return
+    if (patch.fundId) {
+      const id = resolveFundCatalogId(patch.fundId) ?? patch.fundId
+      if (ALL_FUNDS.some((f) => f.id === id)) setSelectedId(id)
+    }
+    if (patch.fundPeriod) setFundPeriod(patch.fundPeriod)
+  }, [])
 
   const apexFundSeries = useMemo(
     () => [

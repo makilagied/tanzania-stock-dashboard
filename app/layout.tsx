@@ -2,7 +2,8 @@ import type React from "react"
 import type { Metadata } from "next"
 import Script from "next/script"
 import { Playfair_Display, Source_Sans_3 as Source_Sans_Pro } from "next/font/google"
-import { CalculatorModal } from "@/components/calculator-modal"
+import { ChartAssistantProvider } from "@/components/chart-assistant-context"
+import { ChartAssistantModal } from "@/components/chart-assistant-modal"
 import { MobileAppBar } from "@/components/mobile-app-bar"
 import { ThemeProvider } from "@/components/theme-provider"
 import "./globals.css"
@@ -118,9 +119,11 @@ export default function RootLayout({
           `}
         </Script>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="theme" disableTransitionOnChange>
-          <div className="pb-[calc(3.25rem+env(safe-area-inset-bottom,0px))] lg:pb-0">{children}</div>
-          <CalculatorModal />
-          <MobileAppBar />
+          <ChartAssistantProvider>
+            <div className="pb-[calc(3.25rem+env(safe-area-inset-bottom,0px))] lg:pb-0">{children}</div>
+            <ChartAssistantModal />
+            <MobileAppBar />
+          </ChartAssistantProvider>
         </ThemeProvider>
       </body>
     </html>

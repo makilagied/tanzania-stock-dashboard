@@ -1,3 +1,4 @@
+import { parseInclusiveYmdRange } from "@/lib/chart-analytics-range"
 import type { HistoricalPoint } from "@/lib/market-data"
 import {
   ANALYTICS_PERIOD_LABELS,
@@ -140,26 +141,17 @@ function buildMaNote(
   return parts.join(" ")
 }
 
-/**
- * Period analytics on the window slice; MA levels from the latest row of **full** enriched history.
- */
-export function computeStockPeriodAnalytics(
-  fullEnrichedAscending: StockChartRow[],
+function computeStockPeriodAnalyticsFromSlice(
+  slice: StockChartRow[],
   period: FundAnalyticsPeriod,
+  rangeLabel: string,
+  latestRowFull: StockChartRow,
 ): StockPeriodAnalytics | null {
-  if (fullEnrichedAscending.length === 0) return null
+  if (slice.length === 0) return null
 
-  const latestRow = fullEnrichedAscending[fullEnrichedAscending.length - 1]
-  const latestTs = latestRow.dateSort
-  const windowStart = getAnalyticsWindowStart(period, latestTs)
-  const slice =
-    period === "all"
-      ? fullEnrichedAscending
-      : fullEnrichedAscending.filter((r) => r.dateSort >= windowStart)
-
-  const sma20 = latestRow.sma20 ?? null
-  const sma50 = latestRow.sma50 ?? null
-  const lastClose = latestRow.close
+  const sma20 = latestRowFull.sma20 ?? null
+  const sma50 = latestRowFull.sma50 ?? null
+  const lastClose = latestRowFull.close
 
   if (slice.length < 2) {
     const row0 = slice[0]
@@ -169,9 +161,9 @@ export function computeStockPeriodAnalytics(
       row0 != null ? (row0.low != null && row0.low > 0 ? row0.low : row0.close) : null
     return {
       period,
-      rangeLabel: ANALYTICS_PERIOD_LABELS[period],
+      rangeLabel,
       startDate: slice[0]?.date ?? null,
-      endDate: latestRow.date,
+      endDate: latestRowFull.date,
       observations: slice.length,
       closeStart: slice[0]?.close ?? null,
       closeEnd: lastClose,
@@ -253,7 +245,7 @@ export function computeStockPeriodAnalytics(
 
   return {
     period,
-    rangeLabel: ANALYTICS_PERIOD_LABELS[period],
+    rangeLabel,
     startDate: start.date,
     endDate: end.date,
     observations: slice.length,
@@ -275,4 +267,44 @@ export function computeStockPeriodAnalytics(
     lastClose,
     maTrendNote: buildMaNote(lastClose, sma20, sma50),
   }
+}
+
+/**
+ * Period analytics on the window slice; MA levels from the latest row of **full** enriched history.
+ */
+export function computeStockPeriodAnalytics(
+  fullEnrichedAscending: StockChartRow[],
+  period: FundAnalyticsPeriod,
+): StockPeriodAnalytics | null {
+  if (fullEnrichedAscending.length === 0) return null
+
+  const latestRow = fullEnrichedAscending[fullEnrichedAscending.length - 1]
+  const latestTs = latestRow.dateSort
+  const windowStart = getAnalyticsWindowStart(period, latestTs)
+  const slice =
+    period === "all"
+      ? fullEnrichedAscending
+      : fullEnrichedAscending.filter((r) => r.dateSort >= windowStart)
+
+  return computeStockPeriodAnalyticsFromSlice(
+    slice,
+    period,
+    ANALYTICS_PERIOD_LABELS[period],
+    latestRow,
+  )
+}
+
+/** Inclusive YYYY-MM-DD window; `period` in the result is `"all"` with a custom `rangeLabel`. */
+export function computeStockPeriodAnalyticsForYmdRange(
+  fullEnrichedAscending: StockChartRow[],
+  rangeStartYmd: string,
+  rangeEndYmd: string,
+): StockPeriodAnalytics | null {
+  const bounds = parseInclusiveYmdRange(rangeStartYmd, rangeEndYmd)
+  if (!bounds || fullEnrichedAscending.length === 0) return null
+  const latestRow = fullEnrichedAscending[fullEnrichedAscending.length - 1]
+  const slice = fullEnrichedAscending.filter(
+    (r) => r.dateSort >= bounds.startMs && r.dateSort <= bounds.endMs,
+  )
+  return computeStockPeriodAnalyticsFromSlice(slice, "all", bounds.label, latestRow)
 }
