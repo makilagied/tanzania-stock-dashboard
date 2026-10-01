@@ -60,7 +60,8 @@ export async function withStaleFallback<T>(options: {
       return { data: prev.value as T, stale: true, cachedAtMs: prev.updatedAt }
     }
     return { data: emptyValue, stale: false, outage: true }
-  } catch {
+  } catch (error) {
+    console.error(`[stale-cache] live fetch failed for "${key}":`, error instanceof Error ? error.message : error)
     const prev = store.get(key)
     if (prev) {
       return { data: prev.value as T, stale: true, cachedAtMs: prev.updatedAt }
