@@ -1,4 +1,5 @@
 import { historyDateToIsoDate } from "@/lib/history-date"
+import { itrustGet } from "@/lib/itrust-market-client"
 
 export interface StockData {
   id: string
@@ -39,6 +40,27 @@ export interface HistoricalCurrentPoint {
   description?: string
 }
 
+export interface IntradayPoint {
+  /** Wall-clock (EAT) time as "HH:MM". */
+  time: string
+  /** Epoch ms of that wall-clock time encoded as UTC, so charts render it with UTC labels. */
+  t: number
+  price: number
+}
+
+export interface IntradayData {
+  success: boolean
+  date: string
+  /** True while the market is open and the series is still updating. */
+  isLive: boolean
+  /** Human-readable status from the source, e.g. "Showing closing data for 30 Sep 2026". */
+  message: string
+  open?: number
+  high?: number
+  low?: number
+  points: IntradayPoint[]
+}
+
 export interface ShareIndexPoint {
   indexDescription: string
   closingPrice: number
@@ -59,15 +81,10 @@ export interface LiveMoverPoint {
   volume: number
 }
 
-const DSE_BASE_URL = "https://api.dse.co.tz/api"
-const DSE_HISTORY_URL = "https://dse.co.tz/api/get/market/prices/for/range/duration"
-/** DSE returns an empty series for very large `days` (e.g. 4500+); cap so we keep real prices, not synthetic fallback. */
-const DSE_HISTORY_MAX_DAYS = 4000
+/** Max history span requested from the iTrust 360 historical endpoint. */
+const HISTORY_MAX_DAYS = 4000
 /** Synthetic history is only for empty API responses; long spans compound noise into nonsense prices. */
 const FALLBACK_HISTORY_MAX_DAYS = 120
-const DSE_INDICES_URL = "https://dse.co.tz/get/last/traded/indices"
-const DSE_MOVERS_URL = "https://dse.co.tz/get/gainers/losers"
-const DSE_TOP_MOVERS_URL = "https://dse.co.tz/get/movers"
 
 const SAMPLE_SYMBOLS = ["CRDB", "NMB", "VODA", "TCC", "SWIS", "DSE", "MBP", "DCB"]
 
@@ -272,42 +289,107 @@ export const resolveChangePercent = (item: any, price: number, change: number): 
   return computed ?? 0
 }
 
-export const normalizeStocks = (raw: any[]): StockData[] => {
-  return raw.map((item) => {
-    const price = toNumber(item.marketPrice ?? item.openingPrice)
-    const change = toNumber(item.change)
-    return {
-      id: String(item.id || item.security?.id || item.companyId || item.security?.symbol || item.symbol || Math.random()),
-      symbol: item.security?.symbol || item.company?.symbol || item.symbol || "N/A",
-      name: item.security?.securityDesc || item.company?.name || item.name || "Unknown Company",
-      price,
-      change,
-      changePercent: resolveChangePercent(item, price, change),
-      volume: toNumber(item.volume),
-      marketCap: item.marketCap == null ? undefined : toNumber(item.marketCap),
-      bestBidPrice: item.bestBidPrice == null ? undefined : toNumber(item.bestBidPrice),
-      bestOfferPrice: item.bestOfferPrice == null ? undefined : toNumber(item.bestOfferPrice),
-      openingPrice: item.openingPrice == null ? undefined : toNumber(item.openingPrice),
-    }
-  })
+type ItrustSecurity = {
+  ticker?: string
+  name?: string
+  type?: string
+  price?: number | string
+  change?: number | string
+  change_percent?: number | string
+  volume?: number | string
+}
+
+type ItrustSecuritiesPage = { next?: string | null; results?: ItrustSecurity[] }
+
+export const normalizeStocks = (raw: ItrustSecurity[]): StockData[] => {
+  return raw
+    .filter((item) => item.ticker && (item.type == null || item.type === "equity"))
+    .map((item) => {
+      const price = toNumber(item.price)
+      const change = toNumber(item.change)
+      const pct = parseOptionalPercent(item.change_percent)
+      const prevClose = price - change
+      return {
+        id: String(item.ticker),
+        symbol: String(item.ticker),
+        name: item.name || String(item.ticker),
+        price,
+        change,
+        changePercent: pct ?? (prevClose > 0 ? (change / prevClose) * 100 : 0),
+        volume: toNumber(item.volume),
+      }
+    })
 }
 
 export const getLiveStocks = async (): Promise<StockData[]> => {
-  const response = await fetch(`${DSE_BASE_URL}/market-data?isBond=false`, {
-    next: { revalidate: 60 },
-  })
-  if (!response.ok) throw new Error(`Failed to fetch live stocks: ${response.status}`)
-  const data = await response.json()
-  if (!Array.isArray(data)) return []
-  return normalizeStocks(data)
+  const rows: ItrustSecurity[] = []
+  let path: string | null = "/market/securities/?type=equity&page_size=100&sort=-price"
+  // Follow pagination defensively (page_size is honoured today, but don't rely on it).
+  for (let i = 0; path && i < 10; i++) {
+    const page: ItrustSecuritiesPage = await itrustGet<ItrustSecuritiesPage>(path, 60)
+    rows.push(...(Array.isArray(page?.results) ? page.results : []))
+    path = page?.next ? page.next.replace(/^https?:\/\/[^/]+\/api\/client/, "") : null
+  }
+  return normalizeStocks(rows)
 }
 
+type ItrustBookLevel = { price?: string | number; quantity?: number | string }
+
+/** `companyId` is the ticker symbol (StockData.id). Maps bid/ask ladders onto the UI's paired rows. */
 export const getMarketOrders = async (companyId: string) => {
-  const response = await fetch(`${DSE_BASE_URL}/market-orders/companies/${companyId}`, {
-    next: { revalidate: 60 },
-  })
-  if (!response.ok) throw new Error(`Failed to fetch market orders: ${response.status}`)
-  return response.json()
+  const payload = await itrustGet<{
+    data?: { order_book?: { best_bid?: ItrustBookLevel | null; best_ask?: ItrustBookLevel | null; bids?: ItrustBookLevel[]; asks?: ItrustBookLevel[] } }
+  }>(`/market/securities/${encodeURIComponent(companyId)}/intraday/`, 60)
+  const book = payload?.data?.order_book ?? {}
+  const bids = Array.isArray(book.bids) ? book.bids : []
+  const asks = Array.isArray(book.asks) ? book.asks : []
+  const orders = Array.from({ length: Math.max(bids.length, asks.length) }, (_, i) => ({
+    buyPrice: toNumber(bids[i]?.price),
+    buyQuantity: toNumber(bids[i]?.quantity),
+    sellPrice: toNumber(asks[i]?.price),
+    sellQuantity: toNumber(asks[i]?.quantity),
+  }))
+  return {
+    bestBuyPrice: toNumber(book.best_bid?.price ?? bids[0]?.price),
+    bestSellPrice: toNumber(book.best_ask?.price ?? asks[0]?.price),
+    orders,
+  }
+}
+
+export const getIntradayData = async (symbol: string): Promise<IntradayData> => {
+  const payload = await itrustGet<{
+    meta?: { message?: string; data_date?: string }
+    data?: {
+      intraday_date?: string
+      is_live_intraday?: boolean
+      market_data?: { opening_price?: string | number; high_price?: string | number; low_price?: string | number }
+      chart_data?: { price_data?: { time?: string; price?: string | number | null }[] }
+    }
+  }>(`/market/securities/${encodeURIComponent(symbol)}/intraday/`, 60)
+  const d = payload?.data
+  const date = d?.intraday_date ?? payload?.meta?.data_date ?? ""
+  const points: IntradayPoint[] = (d?.chart_data?.price_data ?? [])
+    .map((row) => {
+      const time = String(row.time ?? "")
+      const price = toNumber(row.price)
+      const t = Date.parse(`${date}T${time}:00Z`)
+      return /^\d{1,2}:\d{2}$/.test(time) && price > 0 && Number.isFinite(t) ? { time, t, price } : null
+    })
+    .filter((p): p is IntradayPoint => p != null)
+  const opt = (v: unknown) => {
+    const n = toNumber(v)
+    return n > 0 ? n : undefined
+  }
+  return {
+    success: points.length > 0,
+    date,
+    isLive: Boolean(d?.is_live_intraday),
+    message: payload?.meta?.message ?? "",
+    open: opt(d?.market_data?.opening_price),
+    high: opt(d?.market_data?.high_price),
+    low: opt(d?.market_data?.low_price),
+    points,
+  }
 }
 
 const normalizeHistoryPayload = (data: any): HistoricalPoint[] => {
@@ -396,20 +478,38 @@ const generateFallbackHistory = (symbol: string, days: number, basePrice: number
   })
 }
 
-const fetchDseHistoryPayload = async (symbol: string, days: number) => {
-  const dseDays = Math.min(Math.max(7, days), DSE_HISTORY_MAX_DAYS)
-  const historyUrl = new URL(DSE_HISTORY_URL)
-  historyUrl.searchParams.set("security_code", symbol)
-  historyUrl.searchParams.set("days", String(dseDays))
-  historyUrl.searchParams.set("class", "EQUITY")
-  const response = await fetch(historyUrl.toString(), { next: { revalidate: 300 } })
-  if (!response.ok) return null
-  return response.json()
+/** Fetches iTrust history and reshapes it as `{ data: ohlcv rows, current: [...] }` for the normalizers below. */
+const fetchHistoryPayload = async (symbol: string, days: number) => {
+  const span = Math.min(Math.max(7, days), HISTORY_MAX_DAYS)
+  const from = new Date(Date.now() - span * 86_400_000).toISOString().slice(0, 10)
+  const payload = await itrustGet<{
+    data?: { ohlcv?: unknown[]; market_cap?: number | string | null; stats?: { period_close?: number; period_low?: number; period_high?: number } }
+  }>(`/market/securities/${encodeURIComponent(symbol)}/historical/?from=${from}`, 300)
+  const d = payload?.data
+  const ohlcv = Array.isArray(d?.ohlcv) ? d.ohlcv : []
+  const last = ohlcv[ohlcv.length - 1] as { date?: string; close?: number; low?: number; high?: number } | undefined
+  return {
+    success: true,
+    message: "Data available..",
+    data: ohlcv,
+    current: last
+      ? [
+          {
+            company: symbol,
+            price: last.close ?? d?.stats?.period_close,
+            low: last.low,
+            high: last.high,
+            market_cap: d?.market_cap ?? undefined,
+            trade_date: last.date,
+          },
+        ]
+      : [],
+  }
 }
 
 export const getHistoricalData = async (symbol: string, days = 30): Promise<HistoricalPoint[]> => {
   try {
-    const payload = await fetchDseHistoryPayload(symbol, days)
+    const payload = await fetchHistoryPayload(symbol, days)
     if (payload) {
       const normalized = normalizeHistoryPayload(payload)
       if (normalized.length > 0) return normalized
@@ -445,7 +545,7 @@ export const getHistoricalDataWithMeta = async (
   days = 30,
 ): Promise<{ success: boolean; data: HistoricalPoint[]; current: HistoricalCurrentPoint[]; message: string }> => {
   try {
-    const payload = await fetchDseHistoryPayload(symbol, days)
+    const payload = await fetchHistoryPayload(symbol, days)
     if (payload) {
       const normalizedData = normalizeHistoryPayload(payload)
       const currentRaw = Array.isArray(payload?.current) ? payload.current : []
@@ -481,47 +581,37 @@ export const getHistoricalDataWithMeta = async (
   return { success: data.length > 0, data, current: [], message: data.length > 0 ? "Data available.." : "No data available." }
 }
 
-export const getShareIndices = async (fromDate: string): Promise<{ success: boolean; data: ShareIndexPoint[] }> => {
-  const url = new URL(DSE_INDICES_URL)
-  url.searchParams.set("from", fromDate)
-  const response = await fetch(url.toString(), { next: { revalidate: 300 } })
-  if (!response.ok) throw new Error(`Failed to fetch share indices: ${response.status}`)
-  const payload = await response.json()
-  const rows = Array.isArray(payload?.data) ? payload.data : []
-  const data: ShareIndexPoint[] = rows.map((item: any) => ({
-    indexDescription: String(item.IndexDescription || ""),
-    closingPrice: parseClosingPrice(item.ClosingPrice),
-    change: toNumber(item.Change),
-    code: String(item.Code || ""),
-  }))
-  return { success: Boolean(payload?.success ?? true), data }
+/** The iTrust 360 API exposes no index series, so this reports "unavailable" (UI hides the strip). */
+export const getShareIndices = async (_fromDate: string): Promise<{ success: boolean; data: ShareIndexPoint[] }> => {
+  return { success: false, data: [] }
 }
 
+type ItrustMover = { ticker?: string; price?: number | string; change?: number | string; volume?: number | string }
+
 export const getGainersLosers = async (): Promise<{ success: boolean; data: MoverPoint[] }> => {
-  const response = await fetch(DSE_MOVERS_URL, { next: { revalidate: 120 } })
-  if (!response.ok) throw new Error(`Failed to fetch gainers/losers: ${response.status}`)
-  const payload = await response.json()
-  const rows = Array.isArray(payload?.gainers_and_losers) ? payload.gainers_and_losers : []
-  const data: MoverPoint[] = rows.map((item: any) => ({
-    company: String(item.company || ""),
+  const payload = await itrustGet<{ data?: { top_gainers?: ItrustMover[]; top_losers?: ItrustMover[] } }>(
+    "/market/movers/",
+    120,
+  )
+  const rows = [...(payload?.data?.top_gainers ?? []), ...(payload?.data?.top_losers ?? [])]
+  const data: MoverPoint[] = rows.map((item) => ({
+    company: String(item.ticker || ""),
     change: toNumber(item.change),
     price: toNumber(item.price),
     volume: toNumber(item.volume),
   }))
-  return { success: Boolean(payload?.success ?? true), data }
+  return { success: true, data }
 }
 
+/** Most-traded equities by volume (the old DSE "movers" feed was volume-led). */
 export const getTopMovers = async (): Promise<{ success: boolean; data: LiveMoverPoint[] }> => {
-  const response = await fetch(DSE_TOP_MOVERS_URL, { next: { revalidate: 120 } })
-  if (!response.ok) throw new Error(`Failed to fetch movers: ${response.status}`)
-  const payload = await response.json()
-  const rows = Array.isArray(payload?.movers) ? payload.movers : []
-  const data: LiveMoverPoint[] = rows.map((item: any) => ({
-    company: String(item.company || ""),
-    price: toNumber(item.price),
-    volume: toNumber(item.volume),
-  }))
-  return { success: Boolean(payload?.success ?? true), data }
+  const stocks = await getLiveStocks()
+  const data: LiveMoverPoint[] = stocks
+    .filter((s) => s.volume > 0)
+    .sort((a, b) => b.volume - a.volume)
+    .slice(0, 10)
+    .map((s) => ({ company: s.symbol, price: s.price, volume: s.volume }))
+  return { success: true, data }
 }
 
 export const getWatchlistSymbols = (stocks: StockData[]) => {

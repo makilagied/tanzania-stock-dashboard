@@ -1,7 +1,8 @@
-import type { HistoricalPoint, HistoricalCurrentPoint, LiveMoverPoint, MoverPoint, ShareIndexPoint, StockData } from "@/lib/market-data"
+import type { IntradayData, HistoricalPoint, HistoricalCurrentPoint, LiveMoverPoint, MoverPoint, ShareIndexPoint, StockData } from "@/lib/market-data"
 import {
   getGainersLosers,
   getHistoricalDataWithMeta,
+  getIntradayData,
   getLiveStocks,
   getMarketOrders,
   getShareIndices,
@@ -94,6 +95,18 @@ export function getCachedMarketOrders(companyId: string): Promise<StaleFetchResu
       "orders" in o &&
       Array.isArray((o as { orders?: unknown }).orders),
     emptyValue: ORDERS_OUTAGE,
+    timeoutMs: MARKET_UPSTREAM_TIMEOUT_MS,
+  })
+}
+
+const INTRADAY_OUTAGE: IntradayData = { success: false, date: "", isLive: false, message: "", points: [] }
+
+export function getCachedIntraday(symbol: string): Promise<StaleFetchResult<IntradayData>> {
+  return withStaleFallback({
+    key: `market:intraday:${symbol}`,
+    fetch: () => getIntradayData(symbol),
+    isHealthy: (d) => d.points.length > 0,
+    emptyValue: INTRADAY_OUTAGE,
     timeoutMs: MARKET_UPSTREAM_TIMEOUT_MS,
   })
 }

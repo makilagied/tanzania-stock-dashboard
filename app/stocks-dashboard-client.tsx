@@ -67,6 +67,16 @@ type LiveMoverPoint = {
   volume: number
 }
 
+type IntradayPayload = {
+  date: string
+  isLive: boolean
+  message: string
+  open?: number
+  high?: number
+  low?: number
+  points: { time: string; t: number; price: number }[]
+}
+
 type StockOrder = {
     buyPrice: number
     buyQuantity: number
@@ -113,6 +123,11 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
   const [selectedSymbol, setSelectedSymbol] = useState("CRDB")
   const [stockPeriod, setStockPeriod] = useState<FundAnalyticsPeriod>("1m")
   const [chartType, setChartType] = useState<"line" | "candlestick">("candlestick")
+  const [chartMode, setChartMode] = useState<"historical" | "intraday">("historical")
+  const [intraday, setIntraday] = useState<IntradayPayload | null>(null)
+  /** Which symbol `intraday` belongs to. */
+  const [intradaySymbol, setIntradaySymbol] = useState<string | null>(null)
+  const [intradayLoading, setIntradayLoading] = useState(false)
   const [chartFullscreen, setChartFullscreen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -315,6 +330,45 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
       },
     ],
     [chartHistory, selectedStock?.symbol, selectedSymbol],
+  )
+
+  const intradayPoints = intradaySymbol === selectedSymbol ? (intraday?.points ?? []) : []
+
+  const apexIntradaySeries = useMemo(
+    () => [{ name: selectedSymbol, data: intradayPoints.map((p) => ({ x: p.t, y: p.price })) }],
+    [intradayPoints, selectedSymbol],
+  )
+
+  const apexIntradayOptions = useMemo<ApexOptions>(
+    () => ({
+      chart: {
+        id: `stock-intraday-${selectedSymbol}`,
+        type: "area",
+        background: "transparent",
+        zoom: { type: "x", enabled: true, autoScaleYaxis: true },
+        toolbar: { autoSelected: "zoom", tools: { download: false } },
+        animations: { enabled: false },
+      },
+      dataLabels: { enabled: false },
+      markers: { size: 3 },
+      // Trades are sparse, so a step line shows the last price holding between prints.
+      stroke: { curve: "stepline", width: 2, colors: ["#00c853"] },
+      fill: {
+        type: "gradient",
+        gradient: { shadeIntensity: 1, inverseColors: false, opacityFrom: 0.4, opacityTo: 0, stops: [0, 90, 100] },
+      },
+      grid: { borderColor: "rgba(148, 163, 184, 0.22)", strokeDashArray: 3 },
+      // `t` encodes EAT wall-clock time as UTC, so render with UTC labels.
+      xaxis: { type: "datetime", labels: { datetimeUTC: true, format: "HH:mm" } },
+      yaxis: { title: { text: "Price" }, labels: { formatter: (val) => formatCompact(Number(val)) } },
+      tooltip: {
+        shared: false,
+        x: { format: "HH:mm" },
+        y: { formatter: (val) => formatPrice(Number(val)) },
+      },
+      theme: { mode: isDarkMode ? "dark" : "light" },
+    }),
+    [isDarkMode, selectedSymbol],
   )
 
   const apexLineOptions = useMemo<ApexOptions>(
@@ -578,6 +632,51 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
   }, [selectedSymbol, stockPeriod])
 
   useEffect(() => {
+    if (!selectedSymbol || chartMode !== "intraday") return
+    const symbolRequested = selectedSymbol
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    setIntraday(null)
+    setIntradaySymbol(null)
+    setIntradayLoading(true)
+    const load = async () => {
+      let live = false
+      try {
+        const res = await fetch(`/api/market/intraday/${encodeURIComponent(symbolRequested)}`)
+        const payload = await res.json()
+        if (cancelled) return
+        const points = Array.isArray(payload?.points) ? payload.points : []
+        setIntraday({
+          date: String(payload?.date ?? ""),
+          isLive: Boolean(payload?.isLive),
+          message: String(payload?.message ?? ""),
+          open: payload?.open,
+          high: payload?.high,
+          low: payload?.low,
+          points,
+        })
+        setIntradaySymbol(symbolRequested)
+        live = Boolean(payload?.isLive)
+      } catch {
+        if (!cancelled) {
+          setIntraday(null)
+          setIntradaySymbol(null)
+        }
+      } finally {
+        if (!cancelled) {
+          setIntradayLoading(false)
+          if (live) timer = setTimeout(load, 60_000)
+        }
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [selectedSymbol, chartMode])
+
+  useEffect(() => {
     if (!selectedSymbol) return
     const symbolRequested = selectedSymbol
     setAnalyticsHistory([])
@@ -740,6 +839,23 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
                     {chartFullscreen ? "Exit" : "Full"}
                   </button>
                   <div className="mr-1 inline-flex rounded-md border border-border/60 bg-muted/30 p-0.5">
+                    {(["historical", "intraday"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setChartMode(mode)}
+                        className={`rounded px-2 py-0.5 text-[11px] font-medium capitalize transition-colors ${
+                          chartMode === mode
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                  {chartMode === "historical" && (
+                  <div className="mr-1 inline-flex rounded-md border border-border/60 bg-muted/30 p-0.5">
                     <button
                       type="button"
                       onClick={() => setChartType("line")}
@@ -763,7 +879,8 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
                       Candles
                     </button>
                   </div>
-                  {ANALYTICS_PERIOD_OPTIONS.map(({ id, short }) => (
+                  )}
+                  {chartMode === "historical" && ANALYTICS_PERIOD_OPTIONS.map(({ id, short }) => (
                     <button
                       key={id}
                       type="button"
@@ -780,7 +897,32 @@ export default function HomePage({ seoIntro }: { seoIntro?: ReactNode }) {
                 </div>
             </div>
               <div className="h-[220px] p-3 lg:h-auto lg:min-h-0 lg:flex-1">
-                {historyLoading || analyticsHistoryLoading ? (
+                {chartMode === "intraday" ? (
+                  intradayLoading ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-3 px-4">
+                      <div
+                        className="h-9 w-9 animate-spin rounded-full border-2 border-muted border-t-chart-3"
+                        style={{ animationDuration: "0.85s" }}
+                        aria-hidden
+                      />
+                      <p className="text-center text-xs font-medium text-muted-foreground">Loading intraday prices…</p>
+                    </div>
+                  ) : intradayPoints.length > 0 ? (
+                    <div className="flex h-full w-full min-h-[180px] flex-col">
+                      <p className="px-1 pb-1 text-[10px] text-muted-foreground">
+                        {intraday?.isLive ? "Live · " : ""}
+                        {intraday?.message || intraday?.date}
+                      </p>
+                      <div className="min-h-0 flex-1" key={`${selectedSymbol}-intraday`}>
+                        <ReactApexChart options={apexIntradayOptions} series={apexIntradaySeries} type="area" height="100%" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                      No intraday trades available
+                    </div>
+                  )
+                ) : historyLoading || analyticsHistoryLoading ? (
                   <div className="flex h-full flex-col items-center justify-center gap-3 px-4">
                     <div
                       className="h-9 w-9 animate-spin rounded-full border-2 border-muted border-t-chart-3"
